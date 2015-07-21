@@ -150,7 +150,9 @@ if (ISAL_LIBRARY)
     set(ISAL_SOURCE_FILES
         ${D}/io/erasurecode/erasure_code.c
         ${D}/io/erasurecode/erasure_coder.c
+        ${D}/io/erasurecode/erasure_code_test.c
         ${D}/io/erasurecode/coder/coder_util.c
+        ${D}/io/erasurecode/coder/erasure_code_native.c
         ${D}/io/erasurecode/coder/rs_encoder.c
         ${D}/io/erasurecode/coder/rs_decoder.c
         ${D}/io/erasurecode/coder/xor_encoder.c

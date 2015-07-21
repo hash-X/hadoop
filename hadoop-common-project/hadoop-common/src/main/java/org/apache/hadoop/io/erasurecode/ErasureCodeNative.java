@@ -39,7 +39,7 @@ public class ErasureCodeNative {
         loadLibrary();
         nativeIsalLoaded = true;
       } catch (Throwable t) {
-        LOG.error("failed to load ISA-L", t);
+        LOG.error("Failed to load ISA-L", t);
       }
     }
   }
