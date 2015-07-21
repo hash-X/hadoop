@@ -41,6 +41,7 @@
     <hadoop.component>UNDEF</hadoop.component>
     <bundle.snappy>false</bundle.snappy>
     <bundle.snappy.in.bin>false</bundle.snappy.in.bin>
+    <bundle.isal>true</bundle.isal>
     <bundle.openssl>false</bundle.openssl>
     <bundle.openssl.in.bin>false</bundle.openssl.in.bin>
   </properties>
@@ -355,6 +356,10 @@
                         if [ "${bundle.openssl}" = "true" ] ; then
                           cd "${openssl.lib}"
                           $$TAR *crypto* | (cd $${TARGET_DIR}/; $$UNTAR)
+                        fi
+                        if [ "${bundle.isal}" = "true" ] ; then
+                          cd "${isal.lib}"
+                          $$TAR *isa* | (cd $${TARGET_DIR}/; $$UNTAR)
                         fi
                       fi
                       BIN_DIR="${BUILD_DIR}/bin"

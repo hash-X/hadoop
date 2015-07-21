@@ -1,0 +1,21 @@
+INCLUDES = -Iinclude
+CFLAGS   = /c /DWINDOWS /DWIN32 $(INCLUDES)
+CC       = cl
+
+SOURCES: erasure_coder.obj erasure_code.obj erasure_coder_sample.obj
+
+exe: $(SOURCES)
+  cl /link $(SOURCES)
+
+erasure_code.obj:
+  $(CC) $(CFLAGS) erasure_code.c
+
+erasure_coder.obj:
+  $(CC) $(CFLAGS) erasure_coder.c
+
+erasure_coder_sample.obj:
+  $(CC) $(CFLAGS) erasure_coder_sample.c
+
+clean:
+  -if exist *.obj del *.obj
+  -if exist sample del sample

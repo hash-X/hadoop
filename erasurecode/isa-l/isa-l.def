@@ -1,0 +1,16 @@
+;----------------------------------------------------
+;   ERASURE_CODE.DEF - isa-l.DLL module definition file
+;----------------------------------------------------
+
+;LIBRARY                isa-l
+
+EXPORTS
+        ec_init_tables                          @1
+        ec_encode_data                          @2
+        ec_encode_data_update                   @3
+        gf_mul                                  @4
+        gf_inv                                  @5
+        gf_gen_rs_matrix                        @6
+        gf_gen_cauchy1_matrix                   @7
+        gf_invert_matrix                        @8
+        gf_vect_mul                             @9

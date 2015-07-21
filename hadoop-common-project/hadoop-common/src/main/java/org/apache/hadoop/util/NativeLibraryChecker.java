@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.util;
 
+import org.apache.hadoop.io.erasurecode.ErasureCodeNative;
 import org.apache.hadoop.util.NativeCodeLoader;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.OpensslCipher;
@@ -59,6 +60,7 @@ public class NativeLibraryChecker {
     boolean nativeHadoopLoaded = NativeCodeLoader.isNativeCodeLoaded();
     boolean zlibLoaded = false;
     boolean snappyLoaded = false;
+    boolean isalLoaded = false;
     // lz4 is linked within libhadoop
     boolean lz4Loaded = nativeHadoopLoaded;
     boolean bzip2Loaded = Bzip2Factory.isNativeBzip2Loaded(conf);
@@ -69,6 +71,7 @@ public class NativeLibraryChecker {
     String hadoopLibraryName = "";
     String zlibLibraryName = "";
     String snappyLibraryName = "";
+    String isalLibraryName = "";
     String lz4LibraryName = "";
     String bzip2LibraryName = "";
     String winutilsPath = null;
@@ -79,11 +82,19 @@ public class NativeLibraryChecker {
       if (zlibLoaded) {
         zlibLibraryName = ZlibFactory.getLibraryName();
       }
+
       snappyLoaded = NativeCodeLoader.buildSupportsSnappy() &&
           SnappyCodec.isNativeCodeLoaded();
       if (snappyLoaded && NativeCodeLoader.buildSupportsSnappy()) {
         snappyLibraryName = SnappyCodec.getLibraryName();
       }
+
+      isalLoaded = NativeCodeLoader.buildSupportsIsal() &&
+              ErasureCodeNative.isNativeCodeLoaded();
+      if (NativeCodeLoader.buildSupportsIsal()) {
+        isalLibraryName = ErasureCodeNative.getLibraryName();
+      }
+
       if (OpensslCipher.getLoadingFailureReason() != null) {
         openSslDetail = OpensslCipher.getLoadingFailureReason();
         openSslLoaded = false;
@@ -114,6 +125,8 @@ public class NativeLibraryChecker {
     System.out.printf("lz4:     %b %s%n", lz4Loaded, lz4LibraryName);
     System.out.printf("bzip2:   %b %s%n", bzip2Loaded, bzip2LibraryName);
     System.out.printf("openssl: %b %s%n", openSslLoaded, openSslDetail);
+    System.out.printf("ISA-L:   %b %s%n", isalLoaded, isalLibraryName);
+
     if (Shell.WINDOWS) {
       System.out.printf("winutils: %b %s%n", winutilsExists, winutilsPath);
     }

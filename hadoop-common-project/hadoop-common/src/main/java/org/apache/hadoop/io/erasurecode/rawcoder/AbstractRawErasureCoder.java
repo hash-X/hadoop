@@ -60,6 +60,32 @@ public abstract class AbstractRawErasureCoder
   }
 
   /**
+   * Convert an input bytes array to direct ByteBuffer.
+   * @param input
+   * @return direct ByteBuffer
+   */
+  protected ByteBuffer convertInputBuffer(byte[] input, int offset, int len) {
+    if (input == null) { // an input can be null, if erased or not to read
+      return null;
+    }
+
+    ByteBuffer directBuffer = ByteBuffer.allocateDirect(len);
+    directBuffer.put(input, offset, len);
+    directBuffer.flip();
+    return directBuffer;
+  }
+
+  /**
+   * Convert an output bytes array buffer to direct ByteBuffer.
+   * @param output
+   * @return direct ByteBuffer
+   */
+  protected ByteBuffer convertOutputBuffer(byte[] output, int len) {
+    ByteBuffer directBuffer = ByteBuffer.allocateDirect(len);
+    return directBuffer;
+  }
+
+  /**
    * Ensure a buffer filled with ZERO bytes from current readable/writable
    * position.
    * @param buffer a buffer ready to read / write certain size bytes

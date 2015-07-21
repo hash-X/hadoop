@@ -137,6 +137,34 @@ public abstract class AbstractRawErasureDecoder extends AbstractRawErasureCoder
   }
 
   /**
+   * Perform the encoding work using bytes array, via converting to direct buffers.
+   * Please note this may be not efficient and serves as fall-back. We should
+   * avoid calling into this.
+   * @param inputs
+   * @param outputs
+   */
+  protected void doDecodeByConvertingToDirectBuffers(byte[][] inputs, int[] inputOffsets,
+                                                     int dataLen, int[] erasedIndexes,
+                                                     byte[][] outputs, int[] outputOffsets) {
+    ByteBuffer[] inputBuffers = new ByteBuffer[inputs.length];
+    ByteBuffer[] outputBuffers = new ByteBuffer[outputs.length];
+
+    for (int i = 0; i < inputs.length; i++) {
+      inputBuffers[i] = convertInputBuffer(inputs[i], inputOffsets[i], dataLen);
+    }
+
+    for (int i = 0; i < outputs.length; i++) {
+      outputBuffers[i] = convertOutputBuffer(outputs[i], dataLen);
+    }
+
+    doDecode(inputBuffers, erasedIndexes, outputBuffers);
+
+    for (int i = 0; i < outputs.length; i++) {
+      outputBuffers[i].get(outputs[i], outputOffsets[i], dataLen);
+    }
+  }
+
+  /**
    * Check and validate decoding parameters, throw exception accordingly. The
    * checking assumes it's a MDS code. Other code  can override this.
    * @param inputs

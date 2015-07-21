@@ -120,6 +120,34 @@ public abstract class AbstractRawErasureEncoder extends AbstractRawErasureCoder
   }
 
   /**
+   * Perform the encoding work using bytes array, via converting to ByteBuffers.
+   * Please note this may be not efficient and serves as fall-back. We should
+   * avoid calling into this.
+   * @param inputs
+   * @param outputs
+   */
+  protected void doEncodeByConvertingToDirectBuffers(byte[][] inputs, int[] inputOffsets,
+                                                     int dataLen, byte[][] outputs,
+                                                     int[] outputOffsets) {
+    ByteBuffer[] inputBuffers = new ByteBuffer[inputs.length];
+    ByteBuffer[] outputBuffers = new ByteBuffer[outputs.length];
+
+    for (int i = 0; i < inputs.length; ++i) {
+      inputBuffers[i] = convertInputBuffer(inputs[i], inputOffsets[i], dataLen);
+    }
+
+    for (int i = 0; i < outputs.length; ++i) {
+      outputBuffers[i] = convertOutputBuffer(outputs[i], dataLen);
+    }
+
+    doEncode(inputBuffers, outputBuffers);
+
+    for (int i = 0; i < outputs.length; i++) {
+      outputBuffers[i].get(outputs[i], outputOffsets[i], dataLen);
+    }
+  }
+
+  /**
    * Check and validate decoding parameters, throw exception accordingly.
    * @param inputs
    * @param outputs

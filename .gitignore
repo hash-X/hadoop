@@ -2,6 +2,11 @@
 *.iml
 *.ipr
 *.iws
+*.obj
+*.exe
+sample
+erasurecode/isa-l/bin
+*.dll
 *.orig
 *.rej
 **/.keep
