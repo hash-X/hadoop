@@ -156,6 +156,7 @@
     <ClCompile Include="src\org\apache\hadoop\util\bulk_crc32.c" />
     <ClCompile Include="src\org\apache\hadoop\util\NativeCodeLoader.c">
       <AdditionalOptions Condition="'$(SnappyEnabled)' == 'true'">/D HADOOP_SNAPPY_LIBRARY=L\"snappy.dll\"</AdditionalOptions>
+      <AdditionalOptions Condition="'$(IsalEnabled)' == 'true'">/D HADOOP_ISAL_LIBRARY=L\"isa-l.dll\"</AdditionalOptions>
     </ClCompile>
     <ClCompile Include="src\org\apache\hadoop\util\NativeCrc32.c" />
     <ClCompile Include="src\org\apache\hadoop\yarn\server\nodemanager\windows_secure_container_executor.c">
