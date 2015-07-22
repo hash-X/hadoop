@@ -57,13 +57,14 @@ public abstract class AbstractErasureDecoder extends AbstractErasureCoder {
    * @return
    */
   protected ECBlock[] getInputBlocks(ECBlockGroup blockGroup) {
-    ECBlock[] inputBlocks = new ECBlock[getNumParityUnits()
-        + getNumDataUnits()];
+    ECBlock[] inputBlocks = new ECBlock[getNumDataUnits() +
+            getNumParityUnits()];
 
-    System.arraycopy(blockGroup.getParityBlocks(), 0, inputBlocks, 0,
-        getNumParityUnits());
     System.arraycopy(blockGroup.getDataBlocks(), 0, inputBlocks,
-        getNumParityUnits(), getNumDataUnits());
+            0, getNumDataUnits());
+
+    System.arraycopy(blockGroup.getParityBlocks(), 0, inputBlocks,
+            getNumDataUnits(), getNumParityUnits());
 
     return inputBlocks;
   }
@@ -78,15 +79,15 @@ public abstract class AbstractErasureDecoder extends AbstractErasureCoder {
 
     int idx = 0;
 
-    for (int i = 0; i < getNumParityUnits(); i++) {
-      if (blockGroup.getParityBlocks()[i].isErased()) {
-        outputBlocks[idx++] = blockGroup.getParityBlocks()[i];
-      }
-    }
-
     for (int i = 0; i < getNumDataUnits(); i++) {
       if (blockGroup.getDataBlocks()[i].isErased()) {
         outputBlocks[idx++] = blockGroup.getDataBlocks()[i];
+      }
+    }
+
+    for (int i = 0; i < getNumParityUnits(); i++) {
+      if (blockGroup.getParityBlocks()[i].isErased()) {
+        outputBlocks[idx++] = blockGroup.getParityBlocks()[i];
       }
     }
 
