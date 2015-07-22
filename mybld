@@ -1,1 +1,1 @@
-mvn package -Pdist -Pnative -DskipTests
+mvn package -Pdist,native -DskipTests -Drequire.isal -Dbundle.isal -Disal.lib=/lib64
