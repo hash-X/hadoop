@@ -182,7 +182,7 @@ void load_erasurecode_lib(char* err, size_t err_len) {
   #ifdef WINDOWS
   libec = LoadLibrary(HADOOP_ISAL_LIBRARY);
   if (libec == NULL) {
-    snprintf(err, err_len, "Failed to load %s", HADOOP_ISAL_LIBRARY);
+    snprintf(err, err_len, "Failed to load ISA-L");
     return;
   }
   #endif
