@@ -17,40 +17,11 @@
  */
 package org.apache.hadoop.hdfs.server.datanode.erasurecode;
 
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.BitSet;
-import java.util.Collection;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletionService;
-import java.util.concurrent.ExecutorCompletionService;
-import java.util.concurrent.Future;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
+import com.google.common.base.Preconditions;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.StorageType;
-import org.apache.hadoop.hdfs.BlockReader;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.DFSPacket;
-import org.apache.hadoop.hdfs.DFSUtil;
-import org.apache.hadoop.hdfs.RemoteBlockReader2;
+import org.apache.hadoop.hdfs.*;
 import org.apache.hadoop.hdfs.net.Peer;
 import org.apache.hadoop.hdfs.net.TcpPeerServer;
 import org.apache.hadoop.hdfs.protocol.DatanodeID;
@@ -70,16 +41,19 @@ import org.apache.hadoop.hdfs.util.StripedBlockUtil.StripingChunkReadResult;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.erasurecode.CodecUtil;
 import org.apache.hadoop.io.erasurecode.ECSchema;
-import org.apache.hadoop.io.erasurecode.rawcoder.RSRawDecoder;
 import org.apache.hadoop.io.erasurecode.rawcoder.RawErasureDecoder;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DataChecksum;
 
-import com.google.common.base.Preconditions;
-
-import static org.apache.hadoop.hdfs.util.StripedBlockUtil.convertIndex4Decode;
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * ErasureCodingWorker handles the erasure coding recovery work commands. These
@@ -595,8 +569,7 @@ public final class ErasureCodingWorker {
       int m = 0;
       for (int i = 0; i < targets.length; i++) {
         if (targetsStatus[i]) {
-          result[m++] = convertIndex4Decode(targetIndices[i], 
-              dataBlkNum, parityBlkNum);
+          result[m++] = targetIndices[i];
         }
       }
       return Arrays.copyOf(result, m);
@@ -610,15 +583,14 @@ public final class ErasureCodingWorker {
         StripedReader reader = stripedReaders.get(success[i]);
         ByteBuffer buffer = reader.buffer;
         paddingBufferToLen(buffer, toRecoverLen);
-        inputs[convertIndex4Decode(reader.index, dataBlkNum, parityBlkNum)] = 
+        inputs[reader.index] =
             (ByteBuffer)buffer.flip();
       }
       if (success.length < dataBlkNum) {
         for (int i = 0; i < zeroStripeBuffers.length; i++) {
           ByteBuffer buffer = zeroStripeBuffers[i];
           paddingBufferToLen(buffer, toRecoverLen);
-          int index = convertIndex4Decode(zeroStripeIndices[i], dataBlkNum,
-              parityBlkNum);
+          int index = zeroStripeIndices[i];
           inputs[index] = (ByteBuffer)buffer.flip();
         }
       }
