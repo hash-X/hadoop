@@ -860,9 +860,10 @@ public class DFSStripedInputStream extends DFSInputStream {
       }
       final int decodeIndex = StripedBlockUtil.convertIndex4Decode(index,
           dataBlkNum, parityBlkNum);
+      final int parityIndex = decodeIndex - dataBlkNum;
       ByteBuffer buf = getParityBuffer().duplicate();
-      buf.position(cellSize * decodeIndex);
-      buf.limit(cellSize * decodeIndex + (int) alignedStripe.range.spanInBlock);
+      buf.position(cellSize * parityIndex);
+      buf.limit(cellSize * parityIndex + (int) alignedStripe.range.spanInBlock);
       decodeInputs[decodeIndex] = buf.slice();
       alignedStripe.chunks[index] = new StripingChunk(decodeInputs[decodeIndex]);
       return true;
