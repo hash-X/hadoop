@@ -21,14 +21,24 @@ import com.google.common.base.Preconditions;
 import org.apache.hadoop.fs.ChecksumException;
 import org.apache.hadoop.fs.ReadOption;
 import org.apache.hadoop.fs.StorageType;
-import org.apache.hadoop.hdfs.protocol.*;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.protocol.LocatedBlock;
+import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.apache.hadoop.hdfs.protocol.LocatedStripedBlock;
 import org.apache.hadoop.hdfs.protocol.datatransfer.InvalidEncryptionKeyException;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockIdManager;
 import org.apache.hadoop.hdfs.util.StripedBlockUtil;
 import org.apache.hadoop.io.ByteBufferPool;
+
+import static org.apache.hadoop.hdfs.util.StripedBlockUtil.AlignedStripe;
+import static org.apache.hadoop.hdfs.util.StripedBlockUtil.StripingChunk;
+import static org.apache.hadoop.hdfs.util.StripedBlockUtil.StripingChunkReadResult;
+
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.erasurecode.CodecUtil;
 import org.apache.hadoop.io.erasurecode.ECSchema;
+
 import org.apache.hadoop.io.erasurecode.rawcoder.RawErasureDecoder;
 
 import java.io.EOFException;
@@ -36,10 +46,17 @@ import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.*;
-import java.util.concurrent.*;
-
-import static org.apache.hadoop.hdfs.util.StripedBlockUtil.*;
+import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.Set;
+import java.util.Collection;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Future;
 
 /**
  * DFSStripedInputStream reads from striped block groups
@@ -759,7 +776,9 @@ public class DFSStripedInputStream extends DFSInputStream {
     boolean prepareParityChunk(int index) {
       Preconditions.checkState(index >= dataBlkNum &&
           alignedStripe.chunks[index] == null);
-      alignedStripe.chunks[index] = new StripingChunk(decodeInputs[index]);
+      final int decodeIndex = StripedBlockUtil.convertIndex4Decode(index,
+          dataBlkNum, parityBlkNum);
+      alignedStripe.chunks[index] = new StripingChunk(decodeInputs[decodeIndex]);
       alignedStripe.chunks[index].addByteArraySlice(0,
           (int) alignedStripe.getSpanInBlock());
       return true;
@@ -796,9 +815,12 @@ public class DFSStripedInputStream extends DFSInputStream {
           int pos = (int) (range.offsetInBlock % cellSize + cellSize * i);
           cur.position(pos);
           cur.limit((int) (pos + range.spanInBlock));
-          decodeInputs[i] = cur.slice();
+          final int decodeIndex = StripedBlockUtil.convertIndex4Decode(i,
+              dataBlkNum, parityBlkNum);
+          decodeInputs[decodeIndex] = cur.slice();
           if (alignedStripe.chunks[i] == null) {
-            alignedStripe.chunks[i] = new StripingChunk(decodeInputs[i]);
+            alignedStripe.chunks[i] = new StripingChunk(
+                decodeInputs[decodeIndex]);
           }
         }
       }
@@ -813,9 +835,11 @@ public class DFSStripedInputStream extends DFSInputStream {
         // we have failed the block reader before
         return false;
       }
-      decodeInputs[index] = ByteBuffer.allocateDirect(
+      final int decodeIndex = StripedBlockUtil.convertIndex4Decode(index,
+          dataBlkNum, parityBlkNum);
+      decodeInputs[decodeIndex] = ByteBuffer.allocateDirect(
           (int) alignedStripe.range.spanInBlock);
-      alignedStripe.chunks[index] = new StripingChunk(decodeInputs[index]);
+      alignedStripe.chunks[index] = new StripingChunk(decodeInputs[decodeIndex]);
       return true;
     }
 
@@ -824,16 +848,18 @@ public class DFSStripedInputStream extends DFSInputStream {
       // TODO no copy for data chunks. this depends on HADOOP-12047
       final int span = (int) alignedStripe.getSpanInBlock();
       for (int i = 0; i < alignedStripe.chunks.length; i++) {
+        final int decodeIndex = StripedBlockUtil.convertIndex4Decode(i,
+            dataBlkNum, parityBlkNum);
         if (alignedStripe.chunks[i] != null &&
             alignedStripe.chunks[i].state == StripingChunk.ALLZERO) {
           for (int j = 0; j < span; j++) {
-            decodeInputs[i].put((byte) 0);
+            decodeInputs[decodeIndex].put((byte) 0);
           }
-          decodeInputs[i].flip();
+          decodeInputs[decodeIndex].flip();
         } else if (alignedStripe.chunks[i] != null &&
             alignedStripe.chunks[i].state == StripingChunk.FETCHED) {
-          decodeInputs[i].position(0);
-          decodeInputs[i].limit(span);
+          decodeInputs[decodeIndex].position(0);
+          decodeInputs[decodeIndex].limit(span);
         }
       }
       int[] decodeIndices = new int[parityBlkNum];
@@ -841,7 +867,8 @@ public class DFSStripedInputStream extends DFSInputStream {
       for (int i = 0; i < alignedStripe.chunks.length; i++) {
         if (alignedStripe.chunks[i] != null &&
             alignedStripe.chunks[i].state == StripingChunk.MISSING) {
-          decodeIndices[pos++] = i;
+          decodeIndices[pos++] = StripedBlockUtil.convertIndex4Decode(i,
+              dataBlkNum, parityBlkNum);
         }
       }
       decodeIndices = Arrays.copyOf(decodeIndices, pos);

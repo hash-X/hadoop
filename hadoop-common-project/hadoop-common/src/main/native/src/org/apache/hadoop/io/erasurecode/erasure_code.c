@@ -172,7 +172,8 @@ void load_erasurecode_lib(char* err, size_t err_len) {
   #ifdef UNIX
   libec = dlopen(HADOOP_ISAL_LIBRARY, RTLD_LAZY | RTLD_GLOBAL);
   if (libec == NULL) {
-    snprintf(err, err_len, "Failed to load %s! (%s)", HADOOP_ISAL_LIBRARY, dlerror());
+    snprintf(err, err_len, "Failed to load %s (%s)",
+                             HADOOP_ISAL_LIBRARY, dlerror());
     return;
   }
   // Clear any existing error
@@ -182,7 +183,7 @@ void load_erasurecode_lib(char* err, size_t err_len) {
   #ifdef WINDOWS
   libec = LoadLibrary(HADOOP_ISAL_LIBRARY);
   if (libec == NULL) {
-    snprintf(err, err_len, "Failed to load ISA-L");
+    snprintf(err, err_len, "Failed to load %s", HADOOP_ISAL_LIBRARY);
     return;
   }
   #endif
