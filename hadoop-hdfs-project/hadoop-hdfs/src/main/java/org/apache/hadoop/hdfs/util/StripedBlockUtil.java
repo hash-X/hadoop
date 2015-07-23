@@ -309,12 +309,14 @@ public class StripedBlockUtil {
    */
   public static int convertIndex4Decode(int index, int dataBlkNum,
       int parityBlkNum) {
-    return index < dataBlkNum ? index + parityBlkNum : index - dataBlkNum;
+    //index < dataBlkNum ? index + parityBlkNum : index - dataBlkNum;
+    return index;
   }
 
   public static int convertDecodeIndexBack(int index, int dataBlkNum,
       int parityBlkNum) {
-    return index < parityBlkNum ? index + dataBlkNum : index - parityBlkNum;
+    //index < parityBlkNum ? index + dataBlkNum : index - parityBlkNum;
+    return index;
   }
 
   /**
