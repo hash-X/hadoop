@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.util.EnumSet;
 import java.util.concurrent.atomic.AtomicReference;
@@ -91,7 +92,7 @@ public class DFSOutputStream extends FSOutputSummer
   static final Log LOG = LogFactory.getLog(DFSOutputStream.class);
 
   /**
-   * Number of times to retry creating a file when there are transient 
+   * Number of times to retry creating a file when there are transient
    * errors (typically related to encryption zones and KeyProvider operations).
    */
   @VisibleForTesting
@@ -166,7 +167,7 @@ public class DFSOutputStream extends FSOutputSummer
     return value;
   }
 
-  /** 
+  /**
    * @return the object for computing checksum.
    *         The type is NULL if checksum is not computed.
    */
@@ -179,7 +180,7 @@ public class DFSOutputStream extends FSOutputSummer
     }
     return checksum;
   }
- 
+
   private DFSOutputStream(DFSClient dfsClient, String src, Progressable progress,
       HdfsFileStatus stat, DataChecksum checksum) throws IOException {
     super(getChecksum4Compute(checksum, stat));
@@ -195,7 +196,7 @@ public class DFSOutputStream extends FSOutputSummer
       DFSClient.LOG.debug(
           "Set non-null progress callback on DFSOutputStream " + src);
     }
-    
+
     this.bytesPerChecksum = checksum.getBytesPerChecksum();
     if (bytesPerChecksum <= 0) {
       throw new HadoopIllegalArgumentException(
@@ -405,10 +406,10 @@ public class DFSOutputStream extends FSOutputSummer
     }
 
     if (currentPacket == null) {
-      currentPacket = createPacket(packetSize, chunksPerPacket, 
+      currentPacket = createPacket(packetSize, chunksPerPacket,
           streamer.getBytesCurBlock(), streamer.getAndIncCurrentSeqno(), false);
       if (DFSClient.LOG.isDebugEnabled()) {
-        DFSClient.LOG.debug("DFSClient writeChunk allocating new packet seqno=" + 
+        DFSClient.LOG.debug("DFSClient writeChunk allocating new packet seqno=" +
             currentPacket.getSeqno() +
             ", src=" + src +
             ", packetSize=" + packetSize +
@@ -419,6 +420,48 @@ public class DFSOutputStream extends FSOutputSummer
 
     currentPacket.writeChecksum(checksum, ckoff, cklen);
     currentPacket.writeData(b, offset, len);
+    currentPacket.incNumChunks();
+    streamer.incBytesCurBlock(len);
+
+    // If packet is full, enqueue it for transmission
+    if (currentPacket.getNumChunks() == currentPacket.getMaxChunks() ||
+        streamer.getBytesCurBlock() == blockSize) {
+      enqueueCurrentPacketFull();
+    }
+  }
+
+  // @see FSOutputSummer#writeChunk()
+  protected synchronized void writeChunk(ByteBuffer buffer, byte[] checksum,
+                                     int ckoff, int cklen) throws IOException {
+    dfsClient.checkOpen();
+    checkClosed();
+
+    if (buffer.remaining() > bytesPerChecksum) {
+      throw new IOException("writeChunk() buffer size is " + buffer.remaining() +
+          " is larger than supported  bytesPerChecksum " +
+          bytesPerChecksum);
+    }
+    if (cklen != 0 && cklen != getChecksumSize()) {
+      throw new IOException("writeChunk() checksum size is supposed to be " +
+          getChecksumSize() + " but found to be " + cklen);
+    }
+
+    if (currentPacket == null) {
+      currentPacket = createPacket(packetSize, chunksPerPacket,
+          streamer.getBytesCurBlock(), streamer.getAndIncCurrentSeqno(), false);
+      if (DFSClient.LOG.isDebugEnabled()) {
+        DFSClient.LOG.debug("DFSClient writeChunk allocating new packet seqno=" +
+            currentPacket.getSeqno() +
+            ", src=" + src +
+            ", packetSize=" + packetSize +
+            ", chunksPerPacket=" + chunksPerPacket +
+            ", bytesCurBlock=" + streamer.getBytesCurBlock());
+      }
+    }
+
+    int len = buffer.remaining();
+    currentPacket.writeChecksum(checksum, ckoff, cklen);
+    currentPacket.writeData(buffer, len);
     currentPacket.incNumChunks();
     streamer.incBytesCurBlock(len);
 
@@ -487,15 +530,15 @@ public class DFSOutputStream extends FSOutputSummer
       lastFlushOffset = 0;
     }
   }
-  
+
   /**
    * Flushes out to all replicas of the block. The data is in the buffers
    * of the DNs but not necessarily in the DN's OS buffers.
    *
    * It is a synchronous operation. When it returns,
-   * it guarantees that flushed data become visible to new readers. 
-   * It is not guaranteed that data has been flushed to 
-   * persistent store on the datanode. 
+   * it guarantees that flushed data become visible to new readers.
+   * It is not guaranteed that data has been flushed to
+   * persistent store on the datanode.
    * Block allocations are persisted on namenode.
    */
   @Override
@@ -519,16 +562,16 @@ public class DFSOutputStream extends FSOutputSummer
       scope.close();
     }
   }
-  
+
   /**
-   * The expected semantics is all data have flushed out to all replicas 
-   * and all replicas have done posix fsync equivalent - ie the OS has 
+   * The expected semantics is all data have flushed out to all replicas
+   * and all replicas have done posix fsync equivalent - ie the OS has
    * flushed it to the disk device (but the disk may have it in its cache).
-   * 
+   *
    * Note that only the current block is flushed to the disk device.
    * To guarantee durable sync across block boundaries the stream should
    * be created with {@link CreateFlag#SYNC_BLOCK}.
-   * 
+   *
    * @param syncFlags
    *          Indicate the semantic of the sync. Currently used to specify
    *          whether or not to update the block length in NameNode.
@@ -545,7 +588,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   /**
    * Flush/Sync buffered data to DataNodes.
-   * 
+   *
    * @param isSync
    *          Whether or not to require all replicas to flush data to the disk
    *          device
@@ -686,7 +729,7 @@ public class DFSOutputStream extends FSOutputSummer
   /**
    * Note that this is not a public API;
    * use {@link HdfsDataOutputStream#getCurrentBlockReplication()} instead.
-   * 
+   *
    * @return the number of valid replicas of the current block
    */
   public synchronized int getCurrentBlockReplication() throws IOException {
@@ -701,10 +744,10 @@ public class DFSOutputStream extends FSOutputSummer
     }
     return currentNodes.length;
   }
-  
+
   /**
-   * Waits till all existing data is flushed and confirmations 
-   * received from datanodes. 
+   * Waits till all existing data is flushed and confirmations
+   * received from datanodes.
    */
   protected void flushInternal() throws IOException {
     long toWaitFor;
@@ -725,9 +768,9 @@ public class DFSOutputStream extends FSOutputSummer
   protected synchronized void start() {
     streamer.start();
   }
-  
+
   /**
-   * Aborts this output stream and releases any system 
+   * Aborts this output stream and releases any system
    * resources associated with this stream.
    */
   synchronized void abort() throws IOException {
@@ -763,9 +806,9 @@ public class DFSOutputStream extends FSOutputSummer
       setClosed();
     }
   }
-  
+
   /**
-   * Closes this output stream and releases any system 
+   * Closes this output stream and releases any system
    * resources associated with this stream.
    */
   @Override
@@ -813,7 +856,7 @@ public class DFSOutputStream extends FSOutputSummer
     }
   }
 
-  // should be called holding (this) lock since setTestFilename() may 
+  // should be called holding (this) lock since setTestFilename() may
   // be called during unit tests
   protected void completeFile(ExtendedBlock last) throws IOException {
     long localstart = Time.monotonicNow();

@@ -208,7 +208,8 @@ public class DFSStripedOutputStream extends DFSOutputStream {
 
       buffers = new ByteBuffer[numAllBlocks];
       for (int i = 0; i < buffers.length; i++) {
-        buffers[i] = ByteBuffer.wrap(byteArrayManager.newByteArray(cellSize));
+        //buffers[i] = ByteBuffer.wrap(byteArrayManager.newByteArray(cellSize));
+        buffers[i] = ByteBuffer.allocateDirect(cellSize);
       }
     }
 
@@ -232,14 +233,14 @@ public class DFSStripedOutputStream extends DFSOutputStream {
       for (int i = 0; i< numAllBlocks; i++) {
         buffers[i].clear();
         if (i >= numDataBlocks) {
-          Arrays.fill(buffers[i].array(), (byte) 0);
+          //Arrays.fill(buffers[i].array(), (byte) 0);
         }
       }
     }
 
     private void release() {
       for (int i = 0; i < numAllBlocks; i++) {
-        byteArrayManager.release(buffers[i].array());
+        //byteArrayManager.release(buffers[i].array());
       }
     }
 
@@ -553,12 +554,16 @@ public class DFSStripedOutputStream extends DFSOutputStream {
     if (!current.isFailed()) {
       try {
         DataChecksum sum = getDataChecksum();
-        sum.calculateChunkedSums(buffer.array(), 0, len, checksumBuf, 0);
+        ByteBuffer newChecksumBuf = ByteBuffer.allocateDirect(checksumBuf.length);
+        sum.calculateChunkedSums(buffer, newChecksumBuf);
+        newChecksumBuf.get(checksumBuf);
         for (int i = 0; i < len; i += sum.getBytesPerChecksum()) {
           int chunkLen = Math.min(sum.getBytesPerChecksum(), len - i);
           int ckOffset = i / sum.getBytesPerChecksum() * getChecksumSize();
-          super.writeChunk(buffer.array(), i, chunkLen, checksumBuf, ckOffset,
-              getChecksumSize());
+          ByteBuffer tmp = buffer.duplicate();
+          tmp.position(i);tmp.limit(i + chunkLen);
+          super.writeChunk(tmp, checksumBuf, ckOffset, getChecksumSize());
+          buffer.position(i + chunkLen);
         }
       } catch(Exception e) {
         handleStreamerFailure("oldBytes=" + oldBytes + ", len=" + len, e);
