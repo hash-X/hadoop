@@ -541,7 +541,7 @@ public class DFSStripedInputStream extends DFSInputStream {
    */
   @Override
   protected void fetchBlockByteRange(LocatedBlock block, long start,
-      long end, byte[] buf, int offset,
+      long end, ByteBuffer buf, int offset,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     // Refresh the striped block group
@@ -664,7 +664,7 @@ public class DFSStripedInputStream extends DFSInputStream {
 
     private ByteBufferStrategy[] getReadStrategies(StripingChunk chunk) {
       if (chunk.byteBuffer != null) {
-        ByteBufferStrategy strategy = new ByteBufferStrategy(chunk.byteBuffer);
+        ByteBufferStrategy strategy = new ByteBufferStrategy(chunk.byteBuffer.buf());
         return new ByteBufferStrategy[]{strategy};
       } else {
         ByteBufferStrategy[] strategies =
@@ -777,7 +777,7 @@ public class DFSStripedInputStream extends DFSInputStream {
   }
 
   class PositionStripeReader extends StripeReader {
-    private byte[][] decodeInputs = null;
+    private ByteBuffer[] decodeInputs = null;
 
     PositionStripeReader(CompletionService<Void> service,
         AlignedStripe alignedStripe, LocatedBlock[] targetBlocks,
@@ -802,8 +802,7 @@ public class DFSStripedInputStream extends DFSInputStream {
       final int decodeIndex = StripedBlockUtil.convertIndex4Decode(index,
           dataBlkNum, parityBlkNum);
       alignedStripe.chunks[index] = new StripingChunk(decodeInputs[decodeIndex]);
-      alignedStripe.chunks[index].addByteArraySlice(0,
-          (int) alignedStripe.getSpanInBlock());
+      alignedStripe.chunks[index].addByteBufferSlice(0, (int) alignedStripe.getSpanInBlock());
       return true;
     }
 

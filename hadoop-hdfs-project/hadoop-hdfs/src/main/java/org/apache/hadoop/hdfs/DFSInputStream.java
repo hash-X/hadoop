@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
@@ -1097,7 +1098,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   }
 
   protected void fetchBlockByteRange(LocatedBlock block, long start, long end,
-      byte[] buf, int offset,
+      ByteBuffer buf, int offset,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     block = refreshLocatedBlock(block);
@@ -1150,7 +1151,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    *                          block replica
    */
   void actualGetFromOneDataNode(final DNAddrPair datanode, LocatedBlock block,
-      final long startInBlk, final long endInBlk, byte[] buf, int offset,
+      final long startInBlk, final long endInBlk, ByteBuffer buf, int offset,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     DFSClientFaultInjector.get().startFetchFromDatanode();

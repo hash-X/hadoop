@@ -67,8 +67,10 @@ public abstract class AbstractNativeRawDecoder
   protected void doDecode(byte[][] inputs, int[] inputOffsets,
                           int dataLen, int[] erasedIndexes,
                           byte[][] outputs, int[] outputOffsets) {
-    doDecodeByConvertingToDirectBuffers(inputs, inputOffsets, dataLen,
-            erasedIndexes, outputs, outputOffsets);
+    throw new RuntimeException("Not implemented yet!");
+
+    //doDecodeByConvertingToDirectBuffers(inputs, inputOffsets, dataLen,
+    //        erasedIndexes, outputs, outputOffsets);
   }
 
   @Override
