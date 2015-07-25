@@ -541,14 +541,14 @@ public class DFSStripedInputStream extends DFSInputStream {
    */
   @Override
   protected void fetchBlockByteRange(LocatedBlock block, long start,
-      long end, ByteBuffer buf, int offset,
+      long end, ByteBuffer buf,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     // Refresh the striped block group
     LocatedStripedBlock blockGroup = getBlockGroupAt(block.getStartOffset());
 
     AlignedStripe[] stripes = StripedBlockUtil.divideByteRangeIntoStripes(
-        schema, cellSize, blockGroup, start, end, buf, offset);
+        schema, cellSize, blockGroup, start, end, buf);
     CompletionService<Void> readService = new ExecutorCompletionService<>(
         dfsClient.getStripedReadsThreadPool());
     final LocatedBlock[] blks = StripedBlockUtil.parseStripedBlockGroup(

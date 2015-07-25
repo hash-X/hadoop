@@ -419,15 +419,13 @@ public class StripedBlockUtil {
    * @param rangeStartInBlockGroup The byte range's start offset in block group
    * @param rangeEndInBlockGroup The byte range's end offset in block group
    * @param buf Destination buffer of the read operation for the byte range
-   * @param offsetInBuf Start offset into the destination buffer
    *
    * At most 5 stripes will be generated from each logical range, as
    * demonstrated in the header of {@link AlignedStripe}.
    */
   public static AlignedStripe[] divideByteRangeIntoStripes(ECSchema ecSchema,
       int cellSize, LocatedStripedBlock blockGroup,
-      long rangeStartInBlockGroup, long rangeEndInBlockGroup, ByteBuffer buf,
-      int offsetInBuf) {
+      long rangeStartInBlockGroup, long rangeEndInBlockGroup, ByteBuffer buf) {
 
     // Step 0: analyze range and calculate basic parameters
     final int dataBlkNum = ecSchema.getNumDataUnits();
@@ -444,7 +442,7 @@ public class StripedBlockUtil {
     AlignedStripe[] stripes = mergeRangesForInternalBlocks(ecSchema, ranges);
 
     // Step 4: calculate each chunk's position in destination buffer
-    calcualteChunkPositionsInBuf(cellSize, stripes, cells, buf, offsetInBuf);
+    calcualteChunkPositionsInBuf(cellSize, stripes, cells, buf);
 
     // Step 5: prepare ALLZERO blocks
     prepareAllZeroChunks(blockGroup, stripes, cellSize, dataBlkNum);
@@ -557,8 +555,7 @@ public class StripedBlockUtil {
   }
 
   private static void calcualteChunkPositionsInBuf(int cellSize,
-      AlignedStripe[] stripes, StripingCell[] cells, ByteBuffer buf,
-      int offsetInBuf) {
+      AlignedStripe[] stripes, StripingCell[] cells, ByteBuffer buf) {
     /**
      *     | <--------------- AlignedStripe --------------->|
      *
@@ -591,8 +588,8 @@ public class StripedBlockUtil {
         if (s.chunks[cell.idxInStripe] == null) {
           s.chunks[cell.idxInStripe] = new StripingChunk(buf);
         }
-        s.chunks[cell.idxInStripe].addByteArraySlice(
-            (int)(offsetInBuf + done + overlapStart - cellStart), overLapLen);
+        s.chunks[cell.idxInStripe].addByteBufferSlice((int) (done +
+            overlapStart - cellStart), overLapLen);
       }
       done += cell.size;
     }
@@ -876,6 +873,15 @@ public class StripedBlockUtil {
       this.buf = buf;
       this.offsetsInBuf = new ArrayList<>();
       this.lengthsInBuf = new ArrayList<>();
+    }
+
+    public ByteBuffer getSegment(int i) {
+      int off = offsetsInBuf.get(i);
+      int len = lengthsInBuf.get(i);
+      ByteBuffer bb = buf.duplicate();
+      bb.position(off);
+      bb.limit(off + len);
+      return bb.slice();
     }
 
     public int[] getOffsets() {
