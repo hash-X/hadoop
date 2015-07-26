@@ -275,7 +275,7 @@ public class StripedBlockUtil {
       if (alignedStripe.chunks[i] == null) {
         final int decodeIndex = convertIndex4Decode(i, dataBlkNum, parityBlkNum);
         alignedStripe.chunks[i] = new StripingChunk(decodeInputs[decodeIndex]);
-        alignedStripe.chunks[i].addByteArraySlice(0,
+        alignedStripe.chunks[i].addByteBufferSlice(0,
             (int) alignedStripe.getSpanInBlock());
       }
     }
@@ -295,7 +295,8 @@ public class StripedBlockUtil {
       final StripingChunk chunk = alignedStripe.chunks[i];
       final int decodeIndex = convertIndex4Decode(i, dataBlkNum, parityBlkNum);
       if (chunk != null && chunk.state == StripingChunk.FETCHED) {
-        chunk.copyTo(decodeInputs[decodeIndex]);
+        //chunk.copyTo(decodeInputs[decodeIndex]);
+        chunk.byteBuffer.buf().flip();
       } else if (chunk != null && chunk.state == StripingChunk.ALLZERO) {
         //Arrays.fill(decodeInputs[decodeIndex], (byte) 0);
       } else {
@@ -357,6 +358,7 @@ public class StripedBlockUtil {
           dataBlkNum, parityBlkNum);
       StripingChunk chunk = alignedStripe.chunks[missingBlkIdx];
       if (chunk.state == StripingChunk.MISSING) {
+        chunk.byteBuffer.buf().flip();
         chunk.copyFrom(decodeOutputs[i]);
       }
     }
