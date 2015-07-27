@@ -724,17 +724,9 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * strategy-agnostic.
    */
   interface ReaderStrategy {
-    public int doRead(BlockReader blockReader, int off, int len)
-        throws ChecksumException, IOException;
-
-    /**
-     * Copy data from the src ByteBuffer into the read buffer.
-     * @param src The src buffer where the data is copied from
-     * @param offset Useful only when the ReadStrategy is based on a byte array.
-     *               Indicate the offset of the byte array for copy.
-     * @param length Useful only when the ReadStrategy is based on a byte array.
-     *               Indicate the length of the data to copy.
-     */
+    public int read(BlockReader blockReader) throws IOException;
+    public int read(BlockReader blockReader, int length) throws IOException;
+    public int getTargetLength();
     public int copyFrom(ByteBuffer src, int offset, int length);
   }
 
@@ -756,17 +748,33 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * Used to read bytes into a byte[]
    */
   private class ByteArrayStrategy implements ReaderStrategy {
-    final byte[] buf;
+    private final byte[] buf;
+    private final int offset;
+    private final int targetLength;
 
-    public ByteArrayStrategy(byte[] buf) {
+    public ByteArrayStrategy(byte[] buf, int offset, int targetLength) {
       this.buf = buf;
+      this.offset = offset;
+      this.targetLength = targetLength;
     }
 
     @Override
-    public int doRead(BlockReader blockReader, int off, int len)
-          throws ChecksumException, IOException {
-      int nRead = blockReader.read(buf, off, len);
+    public int getTargetLength() {
+      return targetLength;
+    }
+
+    @Override
+    public int read(BlockReader blockReader) throws IOException {
+      return read(blockReader, targetLength);
+    }
+
+    @Override
+    public int read(BlockReader blockReader, int length) throws IOException {
+      int nRead = blockReader.read(buf, offset, length);
       updateReadStatistics(readStatistics, nRead, blockReader);
+      if (nRead == 0) {
+        DFSClient.LOG.warn("Zero bytes read");
+      }
       return nRead;
     }
 
@@ -782,33 +790,44 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * Used to read bytes into a user-supplied ByteBuffer
    */
   protected class ByteBufferStrategy implements ReaderStrategy {
-    final ByteBuffer buf;
+    private final ByteBuffer buf;
+    private final int targetLength;
+
     ByteBufferStrategy(ByteBuffer buf) {
       this.buf = buf;
+      this.targetLength = buf.remaining();
     }
 
     @Override
-    public int doRead(BlockReader blockReader, int off, int len)
-        throws ChecksumException, IOException {
-      int oldpos = buf.position();
-      int oldlimit = buf.limit();
-      boolean success = false;
-      try {
-        int ret = blockReader.read(buf);
-        success = true;
-        updateReadStatistics(readStatistics, ret, blockReader);
-        if (ret == 0) {
-          DFSClient.LOG.warn("zero");
-        }
-        return ret;
-      } finally {
-        if (!success) {
-          // Reset to original state so that retries work correctly.
-          buf.position(oldpos);
-          buf.limit(oldlimit);
-        }
-      } 
+    public int read(BlockReader blockReader) throws IOException {
+      return read(blockReader, targetLength);
     }
+
+    @Override
+    public int read(BlockReader blockReader, int length) throws IOException {
+      ByteBuffer tmpBuf = buf.duplicate();
+      tmpBuf.limit(tmpBuf.position() + length);
+      int nRead = blockReader.read(buf.slice());
+      buf.position(buf.position() + nRead);
+      updateReadStatistics(readStatistics, nRead, blockReader);
+      if (nRead == 0) {
+        DFSClient.LOG.warn("Zero bytes read");
+      }
+      return nRead;
+    }
+
+    @Override
+    public int getTargetLength() {
+      return targetLength;
+    }
+
+    /*
+    @Override
+    public void adjustReadLength(int newReadLength) {
+      ByteBuffer newBuf = buf.duplicate();
+      newBuf.limit(buf.position() + newReadLength);
+      this.buf = newBuf;
+    }*/
 
     @Override
     public int copyFrom(ByteBuffer src, int offset, int length) {
@@ -824,7 +843,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * name readBuffer() is chosen to imply similarity to readBuffer() in
    * ChecksumFileSystem
    */ 
-  private synchronized int readBuffer(ReaderStrategy reader, int off, int len,
+  private synchronized int readBuffer(ReaderStrategy reader, int realLen,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     IOException ioe;
@@ -840,7 +859,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     while (true) {
       // retry as many times as seekToNewSource allows.
       try {
-        return reader.doRead(blockReader, off, len);
+        return reader.read(blockReader, realLen);
       } catch ( ChecksumException ce ) {
         DFSClient.LOG.warn("Found Checksum error for "
             + getCurrentBlock() + " from " + currentNode
@@ -876,7 +895,8 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     }
   }
 
-  protected synchronized int readWithStrategy(ReaderStrategy strategy, int off, int len) throws IOException {
+  protected synchronized int readWithStrategy(
+      ReaderStrategy strategy) throws IOException {
     dfsClient.checkOpen();
     if (closed.get()) {
       throw new IOException("Stream closed");
@@ -893,14 +913,15 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
           if (pos > blockEnd || currentNode == null) {
             currentNode = blockSeekTo(pos);
           }
-          int realLen = (int) Math.min(len, (blockEnd - pos + 1L));
+          int realLen = (int) Math.min(strategy.getTargetLength(),
+              (blockEnd - pos + 1L));
           synchronized(infoLock) {
             if (locatedBlocks.isLastBlockComplete()) {
               realLen = (int) Math.min(realLen,
                   locatedBlocks.getFileLength() - pos);
             }
           }
-          int result = readBuffer(strategy, off, realLen, corruptedBlockMap);
+          int result = readBuffer(strategy, realLen, corruptedBlockMap);
           
           if (result >= 0) {
             pos += result;
@@ -939,11 +960,11 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    */
   @Override
   public synchronized int read(final byte buf[], int off, int len) throws IOException {
-    ReaderStrategy byteArrayReader = new ByteArrayStrategy(buf);
+    ReaderStrategy byteArrayReader = new ByteArrayStrategy(buf, off, len);
     TraceScope scope =
         dfsClient.getPathTraceScope("DFSInputStream#byteArrayRead", src);
     try {
-      return readWithStrategy(byteArrayReader, off, len);
+      return readWithStrategy(byteArrayReader);
     } finally {
       scope.close();
     }
@@ -955,7 +976,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     TraceScope scope =
         dfsClient.getPathTraceScope("DFSInputStream#byteBufferRead", src);
     try {
-      return readWithStrategy(byteBufferReader, 0, buf.remaining());
+      return readWithStrategy(byteBufferReader);
     } finally {
       scope.close();
     }

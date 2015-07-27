@@ -371,17 +371,17 @@ public class DFSStripedInputStream extends DFSInputStream {
       ExtendedBlock currentBlock,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
-    final int targetLength = strategy.buf.remaining();
-    int length = 0;
+    final int targetLength = strategy.getTargetLength();
+    int gotLen = 0;
     try {
-      while (length < targetLength) {
-        int ret = strategy.doRead(blockReader, 0, 0);
+      while (gotLen < targetLength) {
+        int ret = strategy.read(blockReader);
         if (ret < 0) {
           throw new IOException("Unexpected EOS from the reader");
         }
-        length += ret;
+        gotLen += ret;
       }
-      return length;
+      return gotLen;
     } catch (ChecksumException ce) {
       DFSClient.LOG.warn("Found Checksum error for "
           + currentBlock + " from " + currentNode
@@ -438,8 +438,8 @@ public class DFSStripedInputStream extends DFSInputStream {
   }
 
   @Override
-  protected synchronized int readWithStrategy(ReaderStrategy strategy,
-      int off, int len) throws IOException {
+  protected synchronized int readWithStrategy(
+      ReaderStrategy strategy) throws IOException {
     dfsClient.checkOpen();
     if (closed.get()) {
       throw new IOException("Stream closed");
@@ -668,7 +668,7 @@ public class DFSStripedInputStream extends DFSInputStream {
         return new ByteBufferStrategy[]{strategy};
       } else {
         ByteBufferStrategy[] strategies =
-            new ByteBufferStrategy[chunk.byteArray.getOffsets().length];
+            new ByteBufferStrategy[chunk.byteBuffer.getOffsets().length];
         for (int i = 0; i < strategies.length; i++) {
           ByteBuffer buffer = ByteBuffer.wrap(chunk.byteArray.buf(),
               chunk.byteArray.getOffsets()[i], chunk.byteArray.getLengths()[i]);

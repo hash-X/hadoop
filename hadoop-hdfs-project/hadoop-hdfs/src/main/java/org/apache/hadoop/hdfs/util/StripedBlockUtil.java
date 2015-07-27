@@ -275,8 +275,8 @@ public class StripedBlockUtil {
       if (alignedStripe.chunks[i] == null) {
         final int decodeIndex = convertIndex4Decode(i, dataBlkNum, parityBlkNum);
         alignedStripe.chunks[i] = new StripingChunk(decodeInputs[decodeIndex]);
-        alignedStripe.chunks[i].addByteBufferSlice(0,
-            (int) alignedStripe.getSpanInBlock());
+        alignedStripe.chunks[i].addByteBufferSlice(0, (int) alignedStripe
+            .getSpanInBlock());
       }
     }
     return decodeInputs;
@@ -444,7 +444,7 @@ public class StripedBlockUtil {
     AlignedStripe[] stripes = mergeRangesForInternalBlocks(ecSchema, ranges);
 
     // Step 4: calculate each chunk's position in destination buffer
-    calcualteChunkPositionsInBuf(cellSize, stripes, cells, buf);
+    calculateChunkPositionsInBuf(cellSize, stripes, cells, buf);
 
     // Step 5: prepare ALLZERO blocks
     prepareAllZeroChunks(blockGroup, stripes, cellSize, dataBlkNum);
@@ -556,8 +556,10 @@ public class StripedBlockUtil {
     return stripes.toArray(new AlignedStripe[stripes.size()]);
   }
 
-  private static void calcualteChunkPositionsInBuf(int cellSize,
-      AlignedStripe[] stripes, StripingCell[] cells, ByteBuffer buf) {
+  private static void calculateChunkPositionsInBuf(int cellSize,
+                                                   AlignedStripe[] stripes,
+                                                   StripingCell[] cells,
+                                                   ByteBuffer buf) {
     /**
      *     | <--------------- AlignedStripe --------------->|
      *
