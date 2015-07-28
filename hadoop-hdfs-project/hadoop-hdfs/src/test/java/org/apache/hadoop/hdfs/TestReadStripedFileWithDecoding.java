@@ -162,16 +162,17 @@ public class TestReadStripedFileWithDecoding {
   private void verifyRead(Path file, int length, byte[] expected)
       throws IOException {
     // pread
-    /*
+
     try (FSDataInputStream fsdis = fs.open(file)) {
       byte[] buf = new byte[length];
       int readLen = fsdis.read(0, buf, 0, buf.length);
       Assert.assertEquals("The fileSize of file should be the same to write size",
           length, readLen);
       Assert.assertArrayEquals(expected, buf);
-    }*/
+    }
 
     // stateful read
+    /*
     ByteBuffer result = ByteBuffer.allocate(length);
     ByteBuffer buf = ByteBuffer.allocate(1024);
     int readLen = 0;
@@ -187,6 +188,7 @@ public class TestReadStripedFileWithDecoding {
     Assert.assertEquals("The length of file should be the same to write size",
         length, readLen);
     Assert.assertArrayEquals(expected, result.array());
+    */
   }
 
   private void testReadWithDNFailure(String file, int fileSize,

@@ -264,8 +264,6 @@ public class StripedBlockUtil {
    */
   public static ByteBuffer[] initDecodeInputs(AlignedStripe alignedStripe,
       int dataBlkNum, int parityBlkNum) {
-    //byte[][] decodeInputs =
-    //    new byte[dataBlkNum + parityBlkNum][(int) alignedStripe.getSpanInBlock()];
     // read the full data aligned stripe
     ByteBuffer[] decodeInputs = new ByteBuffer[dataBlkNum + parityBlkNum];
     for (int i = 0; i < decodeInputs.length; i++) {
