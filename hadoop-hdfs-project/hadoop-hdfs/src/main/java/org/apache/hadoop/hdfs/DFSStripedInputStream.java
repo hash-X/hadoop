@@ -452,7 +452,8 @@ public class DFSStripedInputStream extends DFSInputStream {
         if (pos > blockEnd) {
           blockSeekTo(pos);
         }
-        int realLen = (int) Math.min(len, (blockEnd - pos + 1L));
+        int realLen = (int) Math.min(strategy.getTargetLength(),
+            (blockEnd - pos + 1L));
         synchronized (infoLock) {
           if (locatedBlocks.isLastBlockComplete()) {
             realLen = (int) Math.min(realLen,
@@ -466,7 +467,7 @@ public class DFSStripedInputStream extends DFSInputStream {
           if (!curStripeRange.include(getOffsetInBlockGroup())) {
             readOneStripe(corruptedBlockMap);
           }
-          int ret = copyToTargetBuf(strategy, off + result, realLen - result);
+          int ret = copyToTargetBuf(strategy, realLen - result);
           result += ret;
           pos += ret;
         }
@@ -487,17 +488,14 @@ public class DFSStripedInputStream extends DFSInputStream {
   /**
    * Copy the data from {@link #curStripeBuf} into the given buffer
    * @param strategy the ReaderStrategy containing the given buffer
-   * @param offset the offset of the given buffer. Used only when strategy is
-   *               a ByteArrayStrategy
    * @param length target length
    * @return number of bytes copied
    */
-  private int copyToTargetBuf(ReaderStrategy strategy, int offset, int length) {
+  private int copyToTargetBuf(ReaderStrategy strategy, int length) {
     final long offsetInBlk = getOffsetInBlockGroup();
     int bufOffset = getStripedBufOffset(offsetInBlk);
     curStripeBuf.position(bufOffset);
-    return strategy.copyFrom(curStripeBuf, offset,
-        Math.min(length, curStripeBuf.remaining()));
+    return strategy.read(curStripeBuf, Math.min(length, curStripeBuf.remaining()));
   }
 
   /**
@@ -663,15 +661,14 @@ public class DFSStripedInputStream extends DFSInputStream {
     }
 
     private ByteBufferStrategy[] getReadStrategies(StripingChunk chunk) {
-      if (chunk.byteBuffer != null) {
-        ByteBufferStrategy strategy = new ByteBufferStrategy(chunk.byteBuffer.buf());
+      if (chunk.useByteBuffer()) {
+        ByteBufferStrategy strategy = new ByteBufferStrategy(chunk.getByteBuffer());
         return new ByteBufferStrategy[]{strategy};
       } else {
         ByteBufferStrategy[] strategies =
-            new ByteBufferStrategy[chunk.byteBuffer.getOffsets().length];
+            new ByteBufferStrategy[chunk.getChunkBuffer().getOffsets().length];
         for (int i = 0; i < strategies.length; i++) {
-          ByteBuffer buffer = ByteBuffer.wrap(chunk.byteArray.buf(),
-              chunk.byteArray.getOffsets()[i], chunk.byteArray.getLengths()[i]);
+          ByteBuffer buffer = chunk.getChunkBuffer().getSegment(i);
           strategies[i] = new ByteBufferStrategy(buffer);
         }
         return strategies;
@@ -801,8 +798,9 @@ public class DFSStripedInputStream extends DFSInputStream {
           alignedStripe.chunks[index] == null);
       final int decodeIndex = StripedBlockUtil.convertIndex4Decode(index,
           dataBlkNum, parityBlkNum);
-      alignedStripe.chunks[index] = new StripingChunk(decodeInputs[decodeIndex]);
-      alignedStripe.chunks[index].addByteBufferSlice(0, (int) alignedStripe.getSpanInBlock());
+      alignedStripe.chunks[index] = new StripingChunk(true, decodeInputs[decodeIndex]);
+      alignedStripe.chunks[index].addByteBufferSlice(0,
+          (int) alignedStripe.getSpanInBlock());
       return true;
     }
 
@@ -841,7 +839,7 @@ public class DFSStripedInputStream extends DFSInputStream {
               dataBlkNum, parityBlkNum);
           decodeInputs[decodeIndex] = cur.slice();
           if (alignedStripe.chunks[i] == null) {
-            alignedStripe.chunks[i] = new StripingChunk(
+            alignedStripe.chunks[i] = new StripingChunk(false,
                 decodeInputs[decodeIndex]);
           }
         }
@@ -864,7 +862,7 @@ public class DFSStripedInputStream extends DFSInputStream {
       buf.position(cellSize * parityIndex);
       buf.limit(cellSize * parityIndex + (int) alignedStripe.range.spanInBlock);
       decodeInputs[decodeIndex] = buf.slice();
-      alignedStripe.chunks[index] = new StripingChunk(decodeInputs[decodeIndex]);
+      alignedStripe.chunks[index] = new StripingChunk(false, decodeInputs[decodeIndex]);
       return true;
     }
 

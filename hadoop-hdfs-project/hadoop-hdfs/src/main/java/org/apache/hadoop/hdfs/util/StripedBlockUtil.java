@@ -274,7 +274,7 @@ public class StripedBlockUtil {
     for (int i = 0; i < dataBlkNum; i++) {
       if (alignedStripe.chunks[i] == null) {
         final int decodeIndex = convertIndex4Decode(i, dataBlkNum, parityBlkNum);
-        alignedStripe.chunks[i] = new StripingChunk(decodeInputs[decodeIndex]);
+        alignedStripe.chunks[i] = new StripingChunk(true, decodeInputs[decodeIndex]);
         alignedStripe.chunks[i].addByteBufferSlice(0, (int) alignedStripe
             .getSpanInBlock());
       }
@@ -295,10 +295,10 @@ public class StripedBlockUtil {
       final StripingChunk chunk = alignedStripe.chunks[i];
       final int decodeIndex = convertIndex4Decode(i, dataBlkNum, parityBlkNum);
       if (chunk != null && chunk.state == StripingChunk.FETCHED) {
-        //chunk.copyTo(decodeInputs[decodeIndex]);
-        chunk.byteBuffer.buf().flip();
+        chunk.copyTo(decodeInputs[decodeIndex]);
       } else if (chunk != null && chunk.state == StripingChunk.ALLZERO) {
-        //Arrays.fill(decodeInputs[decodeIndex], (byte) 0);
+        decodeInputs[decodeIndex].put(
+            new byte[decodeInputs[decodeIndex].remaining()]); //Zero it
       } else {
         decodeInputs[decodeIndex] = null;
       }
@@ -358,7 +358,6 @@ public class StripedBlockUtil {
           dataBlkNum, parityBlkNum);
       StripingChunk chunk = alignedStripe.chunks[missingBlkIdx];
       if (chunk.state == StripingChunk.MISSING) {
-        chunk.byteBuffer.buf().flip();
         chunk.copyFrom(decodeOutputs[i]);
       }
     }
@@ -400,7 +399,7 @@ public class StripedBlockUtil {
           final int pos = (int) (bufOffset + overlapStart - cellStart);
           buf.position(pos);
           buf.limit(pos + overLapLen);
-          s.chunks[cell.idxInStripe] = new StripingChunk(buf.slice());
+          s.chunks[cell.idxInStripe] = new StripingChunk(false, buf.slice());
         }
       }
       bufOffset += cell.size;
@@ -590,7 +589,7 @@ public class StripedBlockUtil {
           continue;
         }
         if (s.chunks[cell.idxInStripe] == null) {
-          s.chunks[cell.idxInStripe] = new StripingChunk(buf);
+          s.chunks[cell.idxInStripe] = new StripingChunk(true, buf.duplicate());
         }
         s.chunks[cell.idxInStripe].addByteBufferSlice((int) (done +
             overlapStart - cellStart), overLapLen);
@@ -816,55 +815,53 @@ public class StripedBlockUtil {
      */
     public int state = REQUESTED;
 
-    public final ChunkByteArray byteArray;
-    public final ChunkByteBuffer byteBuffer;
+    private final ByteBuffer byteBuffer;
+    private final ChunkByteBuffer chunkBuffer;
 
-    public StripingChunk(byte[] buf) {
-      this.byteArray = new ChunkByteArray(buf);
-      byteBuffer = null;
-    }
-
-    public StripingChunk(ByteBuffer buf) {
-      this.byteArray = null;
-      this.byteBuffer = new ChunkByteBuffer(buf);
+    public StripingChunk(boolean useChunkBuffer, ByteBuffer buf) {
+      if (useChunkBuffer) {
+        this.byteBuffer = null;
+        this.chunkBuffer = new ChunkByteBuffer(buf);
+      } else {
+        this.byteBuffer = buf;
+        this.chunkBuffer = null;
+      }
     }
 
     public StripingChunk(int state) {
-      this.byteArray = null;
+      this.chunkBuffer = null;
       this.byteBuffer = null;
       this.state = state;
     }
 
-    public void addByteArraySlice(int offset, int length) {
-      assert byteArray != null;
-      byteArray.offsetsInBuf.add(offset);
-      byteArray.lengthsInBuf.add(length);
+    public boolean useByteBuffer() {
+      return byteBuffer != null;
+    }
+
+    public ByteBuffer getByteBuffer() {
+      assert byteBuffer != null;
+      return byteBuffer;
+    }
+
+    public ChunkByteBuffer getChunkBuffer() {
+      assert chunkBuffer != null;
+      return chunkBuffer;
     }
 
     public void addByteBufferSlice(int offset, int length) {
-      assert byteBuffer != null;
-      byteBuffer.offsetsInBuf.add(offset);
-      byteBuffer.lengthsInBuf.add(length);
-    }
-
-    void copyTo(byte[] target) {
-      assert byteArray != null;
-      byteArray.copyTo(target);
+      assert chunkBuffer != null;
+      chunkBuffer.offsetsInBuf.add(offset);
+      chunkBuffer.lengthsInBuf.add(length);
     }
 
     void copyTo(ByteBuffer target) {
-      assert byteBuffer != null;
-      byteBuffer.copyTo(target);
-    }
-
-    void copyFrom(byte[] src) {
-      assert byteArray != null;
-      byteArray.copyFrom(src);
+      assert chunkBuffer != null;
+      chunkBuffer.copyTo(target);
     }
 
     void copyFrom(ByteBuffer src) {
-      assert byteBuffer != null;
-      byteBuffer.copyFrom(src);
+      assert chunkBuffer != null;
+      chunkBuffer.copyFrom(src);
     }
   }
 
@@ -921,16 +918,15 @@ public class StripedBlockUtil {
 
     void copyFrom(ByteBuffer src) {
       for (int i = 0; i < offsetsInBuf.size(); i++) {
-        //System.arraycopy(src, srcPos, buf, offsetsInBuf.get(j),
-        //    lengthsInBuf.get(j));
         ByteBuffer tmp = buf.duplicate();
         tmp.position(offsetsInBuf.get(i));
-        tmp.limit(lengthsInBuf.get(i));
+        tmp.limit(offsetsInBuf.get(i) + lengthsInBuf.get(i));
         tmp.put(src);
       }
     }
   }
 
+  /*
   public static class ChunkByteArray {
     private final byte[] buf;
     private final List<Integer> offsetsInBuf;
@@ -979,7 +975,7 @@ public class StripedBlockUtil {
         srcPos += lengthsInBuf.get(j);
       }
     }
-  }
+  }*/
 
   /**
    * This class represents result from a striped read request.

@@ -257,19 +257,12 @@ public class TestStripedBlockUtil {
                 continue;
               }
               int done = 0;
-              for (int j = 0; j < chunk.byteBuffer.getLengths().length; j++) {
-                /*
-                System.arraycopy(internalBlkBufs[i],
-                    (int) stripe.getOffsetInBlock() + done, assembled,
-                    chunk.byteBuffer.getOffsets()[j],
-                    chunk.byteBuffer.getLengths()[j]);
-                done += chunk.byteBuffer.getLengths()[j];
-                */
-                ByteBuffer segment = chunk.byteBuffer.getSegment(j);
+              for (int j = 0; j < chunk.getChunkBuffer().getLengths().length; j++) {
+                ByteBuffer segment = chunk.getChunkBuffer().getSegment(j);
                 segment.put(internalBlkBufs[i],
                     (int) stripe.getOffsetInBlock() + done,
-                    chunk.byteBuffer.getLengths()[j]);
-                done += chunk.byteBuffer.getLengths()[j];
+                    chunk.getChunkBuffer().getLengths()[j]);
+                done += chunk.getChunkBuffer().getLengths()[j];
               }
             }
           }

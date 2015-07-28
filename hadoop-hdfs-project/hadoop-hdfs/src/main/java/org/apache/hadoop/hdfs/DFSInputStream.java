@@ -726,8 +726,9 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   interface ReaderStrategy {
     public int read(BlockReader blockReader) throws IOException;
     public int read(BlockReader blockReader, int length) throws IOException;
+    public int read(ByteBuffer src);
+    public int read(ByteBuffer src, int length);
     public int getTargetLength();
-    public int copyFrom(ByteBuffer src, int offset, int length);
   }
 
   protected void updateReadStatistics(ReadStatistics readStatistics,
@@ -749,7 +750,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    */
   private class ByteArrayStrategy implements ReaderStrategy {
     private final byte[] buf;
-    private final int offset;
+    private int offset;
     private final int targetLength;
 
     public ByteArrayStrategy(byte[] buf, int offset, int targetLength) {
@@ -771,17 +772,25 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     @Override
     public int read(BlockReader blockReader, int length) throws IOException {
       int nRead = blockReader.read(buf, offset, length);
-      updateReadStatistics(readStatistics, nRead, blockReader);
-      if (nRead == 0) {
+      if (nRead > 0) {
+        updateReadStatistics(readStatistics, nRead, blockReader);
+        offset += nRead;
+      } else {
         DFSClient.LOG.warn("Zero bytes read");
       }
       return nRead;
     }
 
     @Override
-    public int copyFrom(ByteBuffer src, int offset, int length) {
+    public int read(ByteBuffer src) {
+      return read(src, src.remaining());
+    }
+
+    @Override
+    public int read(ByteBuffer src, int length) {
       ByteBuffer writeSlice = src.duplicate();
       writeSlice.get(buf, offset, length);
+      offset += length;
       return length;
     }
   }
@@ -790,29 +799,31 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * Used to read bytes into a user-supplied ByteBuffer
    */
   protected class ByteBufferStrategy implements ReaderStrategy {
-    private final ByteBuffer buf;
+    private final ByteBuffer readBuffer;
     private final int targetLength;
 
-    ByteBufferStrategy(ByteBuffer buf) {
-      this.buf = buf;
-      this.targetLength = buf.remaining();
+    ByteBufferStrategy(ByteBuffer readBuffer) {
+      this.readBuffer = readBuffer;
+      this.targetLength = readBuffer.remaining();
     }
 
     @Override
     public int read(BlockReader blockReader) throws IOException {
-      return read(blockReader, targetLength);
+      return read(blockReader, readBuffer.remaining());
     }
 
     @Override
     public int read(BlockReader blockReader, int length) throws IOException {
-      ByteBuffer tmpBuf = buf.duplicate();
+      ByteBuffer tmpBuf = readBuffer.duplicate();
       tmpBuf.limit(tmpBuf.position() + length);
-      int nRead = blockReader.read(buf.slice());
-      buf.position(buf.position() + nRead);
-      updateReadStatistics(readStatistics, nRead, blockReader);
-      if (nRead == 0) {
-        DFSClient.LOG.warn("Zero bytes read");
+      int nRead = blockReader.read(readBuffer.slice());
+      if (nRead > 0) {
+        readBuffer.position(readBuffer.position() + nRead);
+        updateReadStatistics(readStatistics, nRead, blockReader);
+        return nRead;
       }
+
+      DFSClient.LOG.warn("Zero bytes read");
       return nRead;
     }
 
@@ -821,21 +832,19 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       return targetLength;
     }
 
-    /*
     @Override
-    public void adjustReadLength(int newReadLength) {
-      ByteBuffer newBuf = buf.duplicate();
-      newBuf.limit(buf.position() + newReadLength);
-      this.buf = newBuf;
-    }*/
+    public int read(ByteBuffer src) {
+      return read(src, src.remaining());
+    }
 
     @Override
-    public int copyFrom(ByteBuffer src, int offset, int length) {
+    public int read(ByteBuffer src, int length) {
       ByteBuffer writeSlice = src.duplicate();
-      int remaining = Math.min(buf.remaining(), writeSlice.remaining());
-      writeSlice.limit(writeSlice.position() + remaining);
-      buf.put(writeSlice);
-      return remaining;
+      int newLen = Math.min(src.remaining(), writeSlice.remaining());
+      newLen = Math.min(newLen, length);
+      writeSlice.limit(writeSlice.position() + newLen);
+      readBuffer.put(writeSlice);
+      return newLen;
     }
   }
 
