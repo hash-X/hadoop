@@ -40,7 +40,7 @@ static void usage(char* errorMsg) {
 
 int main(int argc, char *argv[]) {
   int i, j;
-  int chunkSize = 1024;
+  int chunkSize = 64 * 1024;
   int numDataUnits;
   int numParityUnits;
   char errMsg[256];
@@ -117,7 +117,10 @@ int main(int argc, char *argv[]) {
   decodingOutput[0] = malloc(chunkSize);
   decodingOutput[1] = malloc(chunkSize);
 
-  decode(pDecoder, allUnits, erasedIndexes, 2, decodingOutput, chunkSize);
+  pDecoder->cache = 1;
+  for (i = 0; i < 1000000; i++) {
+    decode(pDecoder, allUnits, erasedIndexes, 2, decodingOutput, chunkSize);
+  }
 
   for (i = 0; i < pDecoder->numErased; i++) {
     if (0 != memcmp(decodingOutput[i], backupUnits[i], chunkSize)) {

@@ -19,7 +19,7 @@
 #include "erasure_code.h"
 #include "gf_util.h"
 #include "erasure_coder.h"
-//#include "uthash.h"
+#include "uthash.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +35,11 @@ void initCoder(CoderState* pCoderState, int numDataUnits, int numParityUnits) {
 // 0 not to verbose, 1 to verbose
 void allowVerbose(CoderState* pCoderState, int flag) {
   pCoderState->verbose = flag;
+}
+
+// 0 not to cache, 1 to cache
+void allowCache(DecoderState* pCoderState, int flag) {
+  pCoderState->cache = flag;
 }
 
 static void initEncodeMatrix(int numDataUnits, int numParityUnits,
@@ -61,6 +66,8 @@ void initDecoder(DecoderState* pCoderState, int numDataUnits,
   initCoder((CoderState*)pCoderState, numDataUnits, numParityUnits);
 
   initEncodeMatrix(numDataUnits, numParityUnits, pCoderState->encodeMatrix);
+
+  pCoderState->cache = pCoderState->cached = 0;
 }
 
 int encode(EncoderState* pCoderState, unsigned char** dataUnits,
@@ -112,11 +119,13 @@ int decode(DecoderState* pCoderState, unsigned char** inputs,
 
   processErasures(pCoderState, erasedIndexes, numErased);
 
-  // Generate decode matrix
-  ret = generateDecodeMatrix(pCoderState);
-  if (ret != 0) {
-    printf("Fail to gf_gen_decode_matrix\n");
-    return -1;
+  if (pCoderState->cache == 0 || pCoderState->cached == 0) {
+    // Generate decode matrix
+    ret = generateDecodeMatrix(pCoderState);
+    if (ret != 0) {
+      printf("Fail to gf_gen_decode_matrix\n");
+      return -1;
+    }
   }
 
   // Pack recovery array as list of valid sources
@@ -126,9 +135,12 @@ int decode(DecoderState* pCoderState, unsigned char** inputs,
     pCoderState->realInputs[i] = inputs[pCoderState->decodeIndex[i]];
   }
 
-  // Recover data
-  h_ec_init_tables(numDataUnits, pCoderState->numErased,
+  if (pCoderState->cache == 0 || pCoderState->cached == 0) {
+    // Recover data
+    h_ec_init_tables(numDataUnits, pCoderState->numErased,
                       pCoderState->decodeMatrix, pCoderState->gftbls);
+    pCoderState->cached = 1;
+  }
 
   if (((CoderState*)pCoderState)->verbose > 0) {
     dumpDecoder(pCoderState);
@@ -142,11 +154,13 @@ int decode(DecoderState* pCoderState, unsigned char** inputs,
 
 // Clear variables used per decode call
 void clearDecoder(DecoderState* decoder) {
-  memset(decoder->gftbls, 0, sizeof(decoder->gftbls));
+  if (decoder->cache == 0) {
+    memset(decoder->gftbls, 0, sizeof(decoder->gftbls));
+    memset(decoder->decodeMatrix, 0, sizeof(decoder->decodeMatrix));
+  }
   memset(decoder->decodeIndex, 0, sizeof(decoder->decodeIndex));
   memset(decoder->b, 0, sizeof(decoder->b));
   memset(decoder->invertMatrix, 0, sizeof(decoder->invertMatrix));
-  memset(decoder->decodeMatrix, 0, sizeof(decoder->decodeMatrix));
   memset(decoder->erasureFlags, 0, sizeof(decoder->erasureFlags));
   memset(decoder->erasedIndexes, 0, sizeof(decoder->erasedIndexes));
   memset(decoder->realInputs, 0, sizeof(decoder->realInputs));
