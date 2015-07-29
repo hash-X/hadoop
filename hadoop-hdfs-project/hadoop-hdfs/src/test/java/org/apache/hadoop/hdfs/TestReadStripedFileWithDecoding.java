@@ -172,7 +172,6 @@ public class TestReadStripedFileWithDecoding {
     }
 
     // stateful read
-    /*
     ByteBuffer result = ByteBuffer.allocate(length);
     ByteBuffer buf = ByteBuffer.allocate(1024);
     int readLen = 0;
@@ -188,7 +187,6 @@ public class TestReadStripedFileWithDecoding {
     Assert.assertEquals("The length of file should be the same to write size",
         length, readLen);
     Assert.assertArrayEquals(expected, result.array());
-    */
   }
 
   private void testReadWithDNFailure(String file, int fileSize,
@@ -211,7 +209,6 @@ public class TestReadStripedFileWithDecoding {
     }
 
     // pread
-    /*
     try (FSDataInputStream fsdis = fs.open(testPath)) {
       byte[] buf = new byte[fileSize];
       int readLen = fsdis.read(startOffsetInFile, buf, 0, buf.length);
@@ -226,7 +223,7 @@ public class TestReadStripedFileWithDecoding {
         Assert.assertEquals("Byte at " + i + " should be the same",
             expected[i - startOffsetInFile], buf[i - startOffsetInFile]);
       }
-    }*/
+    }
 
     // stateful read
     ByteBuffer result = ByteBuffer.allocate(fileSize);

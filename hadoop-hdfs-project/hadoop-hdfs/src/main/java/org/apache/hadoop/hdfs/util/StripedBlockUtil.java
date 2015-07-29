@@ -266,9 +266,10 @@ public class StripedBlockUtil {
       int dataBlkNum, int parityBlkNum) {
     // read the full data aligned stripe
     ByteBuffer[] decodeInputs = new ByteBuffer[dataBlkNum + parityBlkNum];
-    for (int i = 0; i < decodeInputs.length; i++) {
-      decodeInputs[i] = bufferPool.getBuffer((int) alignedStripe.getSpanInBlock());
+    for (int i = dataBlkNum; i < decodeInputs.length; i++) {
+      decodeInputs[i] = ByteBuffer.allocate((int) alignedStripe.getSpanInBlock());
     }
+    /*
     for (int i = 0; i < dataBlkNum; i++) {
       if (alignedStripe.chunks[i] == null) {
         final int decodeIndex = convertIndex4Decode(i, dataBlkNum, parityBlkNum);
@@ -276,7 +277,7 @@ public class StripedBlockUtil {
         alignedStripe.chunks[i].addByteBufferSlice(0, (int) alignedStripe
             .getSpanInBlock());
       }
-    }
+    }*/
     return decodeInputs;
   }
 
@@ -293,7 +294,8 @@ public class StripedBlockUtil {
       final StripingChunk chunk = alignedStripe.chunks[i];
       final int decodeIndex = convertIndex4Decode(i, dataBlkNum, parityBlkNum);
       if (chunk != null && chunk.state == StripingChunk.FETCHED) {
-        chunk.copyTo(decodeInputs[decodeIndex]);
+        //chunk.copyTo(decodeInputs[decodeIndex]);
+        decodeInputs[decodeIndex] = chunk.getChunkBuffer().getChunk();
       } else if (chunk != null && chunk.state == StripingChunk.ALLZERO) {
         decodeInputs[decodeIndex].put(
             new byte[decodeInputs[decodeIndex].remaining()]); //Zero it
@@ -341,24 +343,20 @@ public class StripedBlockUtil {
       }
     }
     decodeIndices = Arrays.copyOf(decodeIndices, pos);
-    //byte[][] decodeOutputs =
-    //    new byte[decodeIndices.length][(int) alignedStripe.getSpanInBlock()];
     ByteBuffer[] decodeOutputs = new ByteBuffer[decodeIndices.length];
-    for (int i = 0; i < decodeOutputs.length; i++) {
-      decodeOutputs[i] = bufferPool.getBuffer((int) alignedStripe.getSpanInBlock());
-    }
-    // Step 2: decode into prepared output buffers
-    decoder.decode(decodeInputs, decodeIndices, decodeOutputs);
 
-    // Step 3: fill original application buffer with decoded data
+    // Step 2: fill original application buffer with decoded data
     for (int i = 0; i < decodeIndices.length; i++) {
       int missingBlkIdx = convertDecodeIndexBack(decodeIndices[i],
           dataBlkNum, parityBlkNum);
       StripingChunk chunk = alignedStripe.chunks[missingBlkIdx];
       if (chunk.state == StripingChunk.MISSING) {
-        chunk.copyFrom(decodeOutputs[i]);
+        decodeOutputs[i] = chunk.getChunkBuffer().getChunk();
       }
     }
+
+    // Step 3: decode into prepared output buffers
+    decoder.decode(decodeInputs, decodeIndices, decodeOutputs);
   }
 
   /**
@@ -912,6 +910,19 @@ public class StripedBlockUtil {
         tmp.limit(lengthsInBuf.get(i));
         target.put(tmp);
       }
+    }
+
+    ByteBuffer getChunk() {
+      int pos = offsetsInBuf.get(0);
+      int len = 0;
+      for (int i = 0; i < lengthsInBuf.size(); i++) {
+        len += lengthsInBuf.get(i);
+      }
+
+      ByteBuffer tmp = buf.duplicate();
+      tmp.position(pos);
+      tmp.limit(pos + len);
+      return tmp.slice();
     }
 
     void copyFrom(ByteBuffer src) {
