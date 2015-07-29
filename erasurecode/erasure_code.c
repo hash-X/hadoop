@@ -15,6 +15,14 @@
  *  limitations under the License.
  */
 
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "../include/gf_util.h"
+#include "../include/erasure_code.h"
+
 #ifdef UNIX
 #include <sys/time.h>
 #include <sys/types.h>
@@ -27,14 +35,6 @@
 #ifdef WINDOWS
 #include <Windows.h>
 #endif
-
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "../include/gf_util.h"
-#include "../include/erasure_code.h"
 
 /**
  *  erasure_code.c
@@ -57,7 +57,7 @@ void *my_dlsym(void *handle, const char *symbol) {
 }
 
 /* A helper macro to dlsym the requisite dynamic symbol in NON-JNI env. */
-#define LOAD_DYNAMIC_SYMBOL(func_ptr, handle, symbol) \
+#define EC_LOAD_DYNAMIC_SYMBOL(func_ptr, handle, symbol) \
   if ((func_ptr = my_dlsym(handle, symbol)) == NULL) { \
     return "Failed to load symbol" symbol; \
   }
@@ -74,7 +74,7 @@ static FARPROC WINAPI my_dlsym(HMODULE handle, LPCSTR symbol) {
 }
 
 /* A helper macro to dlsym the requisite dynamic symbol in NON-JNI env. */
-#define LOAD_DYNAMIC_SYMBOL(func_type, func_ptr, handle, symbol) \
+#define EC_LOAD_DYNAMIC_SYMBOL(func_type, func_ptr, handle, symbol) \
   if ((func_ptr = (func_type)my_dlsym(handle, symbol)) == NULL) { \
     return "Failed to load symbol" symbol; \
   }
@@ -129,29 +129,29 @@ static __d_ec_encode_data_update d_ec_encode_data_update;
 
 static const char* load_functions(void* libec) {
 #ifdef UNIX
-  LOAD_DYNAMIC_SYMBOL(d_gf_mul, libec, "gf_mul");
-  LOAD_DYNAMIC_SYMBOL(d_gf_inv, libec, "gf_inv");
-  LOAD_DYNAMIC_SYMBOL(d_gf_gen_rs_matrix, libec, "gf_gen_rs_matrix");
-  LOAD_DYNAMIC_SYMBOL(d_gf_gen_cauchy_matrix, libec, "gf_gen_cauchy1_matrix");
-  LOAD_DYNAMIC_SYMBOL(d_gf_invert_matrix, libec, "gf_invert_matrix");
-  LOAD_DYNAMIC_SYMBOL(d_gf_vect_mul, libec, "gf_vect_mul");
+  EC_LOAD_DYNAMIC_SYMBOL(d_gf_mul, libec, "gf_mul");
+  EC_LOAD_DYNAMIC_SYMBOL(d_gf_inv, libec, "gf_inv");
+  EC_LOAD_DYNAMIC_SYMBOL(d_gf_gen_rs_matrix, libec, "gf_gen_rs_matrix");
+  EC_LOAD_DYNAMIC_SYMBOL(d_gf_gen_cauchy_matrix, libec, "gf_gen_cauchy1_matrix");
+  EC_LOAD_DYNAMIC_SYMBOL(d_gf_invert_matrix, libec, "gf_invert_matrix");
+  EC_LOAD_DYNAMIC_SYMBOL(d_gf_vect_mul, libec, "gf_vect_mul");
 
-  LOAD_DYNAMIC_SYMBOL(d_ec_init_tables, libec, "ec_init_tables");
-  LOAD_DYNAMIC_SYMBOL(d_ec_encode_data, libec, "ec_encode_data");
-  LOAD_DYNAMIC_SYMBOL(d_ec_encode_data_update, libec, "ec_encode_data_update");
+  EC_LOAD_DYNAMIC_SYMBOL(d_ec_init_tables, libec, "ec_init_tables");
+  EC_LOAD_DYNAMIC_SYMBOL(d_ec_encode_data, libec, "ec_encode_data");
+  EC_LOAD_DYNAMIC_SYMBOL(d_ec_encode_data_update, libec, "ec_encode_data_update");
 #endif
 
 #ifdef WINDOWS
-  LOAD_DYNAMIC_SYMBOL(__d_gf_mul, d_gf_mul, libec, "gf_mul");
-  LOAD_DYNAMIC_SYMBOL(__d_gf_inv, d_gf_inv, libec, "gf_inv");
-  LOAD_DYNAMIC_SYMBOL(__d_gf_gen_rs_matrix, d_gf_gen_rs_matrix, libec, "gf_gen_rs_matrix");
-  LOAD_DYNAMIC_SYMBOL(__d_gf_gen_cauchy_matrix, d_gf_gen_cauchy_matrix, libec, "gf_gen_cauchy1_matrix");
-  LOAD_DYNAMIC_SYMBOL(__d_gf_invert_matrix, d_gf_invert_matrix, libec, "gf_invert_matrix");
-  LOAD_DYNAMIC_SYMBOL(__d_gf_vect_mul, d_gf_vect_mul, libec, "gf_vect_mul");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_gf_mul, d_gf_mul, libec, "gf_mul");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_gf_inv, d_gf_inv, libec, "gf_inv");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_gf_gen_rs_matrix, d_gf_gen_rs_matrix, libec, "gf_gen_rs_matrix");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_gf_gen_cauchy_matrix, d_gf_gen_cauchy_matrix, libec, "gf_gen_cauchy1_matrix");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_gf_invert_matrix, d_gf_invert_matrix, libec, "gf_invert_matrix");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_gf_vect_mul, d_gf_vect_mul, libec, "gf_vect_mul");
 
-  LOAD_DYNAMIC_SYMBOL(__d_ec_init_tables, d_ec_init_tables, libec, "ec_init_tables");
-  LOAD_DYNAMIC_SYMBOL(__d_ec_encode_data, d_ec_encode_data, libec, "ec_encode_data");
-  LOAD_DYNAMIC_SYMBOL(__d_ec_encode_data_update, d_ec_encode_data_update, libec, "ec_encode_data_update");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_ec_init_tables, d_ec_init_tables, libec, "ec_init_tables");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_ec_encode_data, d_ec_encode_data, libec, "ec_encode_data");
+  EC_LOAD_DYNAMIC_SYMBOL(__d_ec_encode_data_update, d_ec_encode_data_update, libec, "ec_encode_data_update");
 #endif
 
   return NULL;
@@ -159,7 +159,6 @@ static const char* load_functions(void* libec) {
 
 void load_erasurecode_lib(char* err, size_t err_len) {
   static void* libec = NULL;
-  const char* libecName;
   const char* errMsg;
 
   err[0] = '\0';
@@ -168,13 +167,12 @@ void load_erasurecode_lib(char* err, size_t err_len) {
     return;
   }
 
-  libecName = HADOOP_ERASURECODE_LIBRARY;
-
   // Load Intel ISA-L
   #ifdef UNIX
-  libec = dlopen(libecName, RTLD_LAZY | RTLD_GLOBAL);
+  libec = dlopen(HADOOP_ISAL_LIBRARY, RTLD_LAZY | RTLD_GLOBAL);
   if (libec == NULL) {
-    snprintf(err, err_len, "Failed to load %s! (%s)", libecName, dlerror());
+    snprintf(err, err_len, "Failed to load %s (%s)",
+                             HADOOP_ISAL_LIBRARY, dlerror());
     return;
   }
   // Clear any existing error
@@ -182,17 +180,16 @@ void load_erasurecode_lib(char* err, size_t err_len) {
   #endif
 
   #ifdef WINDOWS
-  libec = LoadLibrary(libecName);
+  libec = LoadLibrary(HADOOP_ISAL_LIBRARY);
   if (libec == NULL) {
-    snprintf(err, err_len, "Failed to load %s", libecName);
+    snprintf(err, err_len, "Failed to load %s", HADOOP_ISAL_LIBRARY);
     return;
   }
   #endif
 
   errMsg = load_functions(libec);
   if (errMsg != NULL) {
-    snprintf(err, err_len, "Loading functions from %s failed: %s",
-                                                          libecName, errMsg);
+    snprintf(err, err_len, "Loading functions from ISA-L failed: %s", errMsg);
   }
 }
 

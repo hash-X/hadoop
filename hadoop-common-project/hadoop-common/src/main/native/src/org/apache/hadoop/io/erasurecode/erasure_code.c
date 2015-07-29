@@ -67,7 +67,7 @@ void *my_dlsym(void *handle, const char *symbol) {
 
 #ifdef WINDOWS
 
-//#define snprintf _snprintf
+
 
 static FARPROC WINAPI my_dlsym(HMODULE handle, LPCSTR symbol) {
   FARPROC func_ptr = GetProcAddress(handle, symbol);
