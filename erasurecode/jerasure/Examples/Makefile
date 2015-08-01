@@ -36,6 +36,7 @@ ALL =	jerasure_01 \
         jerasure_03 \
         jerasure_04 \
         jerasure_05 \
+        jerasure_my \
         jerasure_06 \
         jerasure_07 \
         jerasure_08 \
@@ -73,6 +74,9 @@ jerasure_04: jerasure_04.c
 
 jerasure_05: jerasure_05.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o jerasure_05 jerasure_05.c
+
+jerasure_my: jerasure_my.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -o jerasure_my jerasure_my.c
 
 jerasure_06: jerasure_06.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o jerasure_06 jerasure_06.c

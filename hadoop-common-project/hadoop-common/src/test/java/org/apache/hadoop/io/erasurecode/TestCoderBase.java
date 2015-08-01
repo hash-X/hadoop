@@ -315,7 +315,7 @@ public abstract class TestCoderBase {
      * and in the beginning, dummy data are prefixed, to simulate a buffer of
      * position > 0.
      */
-    int startOffset = startBufferWithZero ? 0 : 11; // 11 is arbitrary
+    int startOffset = startBufferWithZero ? 0 : 0; // 11 is arbitrary
     int allocLen = startOffset + bufferLen + startOffset;
     ByteBuffer buffer = allocator.allocate(allocLen);
     buffer.limit(startOffset + bufferLen);
