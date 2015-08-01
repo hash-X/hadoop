@@ -134,26 +134,26 @@ public final class ErasureCodeUtil {
         } else {
           input = outputs[srcIds[i]-numDataUnits];
         }
-        regionMultiply(input, matrix[rowIdx + i], size, output, init);
+        regionMultiply(input, matrix[rowIdx + i], output, false);
         init = 1;
       }
     }
   }
 
-  public static void encodeDotprod(int numDataUnits, byte[] matrix, int rowIdx,
-                             byte[][] inputs, byte[] output) {
+  public static void encodeDotprod(int numDataUnits, byte[] matrix,
+                                   int matrixOffset, byte[][] inputs, byte[] output) {
     byte[] input;
     int size = 513; //inputs[0].length;
     int i;
 
     //First copy or xor any data that does not need to be multiplied by a factor
-    int init = 0;
+    boolean init = true;
     for (i = 0; i < numDataUnits; i++) {
-      if (matrix[rowIdx + i] == 1) {
+      if (matrix[matrixOffset + i] == 1) {
         input = inputs[i];
-        if (init == 0) {
+        if (init) {
           System.arraycopy(input, 0, output, 0, size);
-          init = 1;
+          init = false;
         } else {
           for (int j = 0; j < size; j++) {
             output[j] ^= input[j];
@@ -164,10 +164,10 @@ public final class ErasureCodeUtil {
 
     //Now do the data that needs to be multiplied by a factor
     for (i = 0; i < numDataUnits; i++) {
-      if (matrix[rowIdx + i] != 0 && matrix[rowIdx + i] != 1) {
+      if (matrix[matrixOffset + i] != 0 && matrix[matrixOffset + i] != 1) {
         input = inputs[i];
-        regionMultiply(input, matrix[rowIdx + i], size, output, init);
-        init = 1;
+        regionMultiply(input, matrix[matrixOffset + i], output, init);
+        init = false;
       }
     }
   }
@@ -198,29 +198,21 @@ public final class ErasureCodeUtil {
     for (i = 0; i < numDataUnits; i++) {
       if (matrix[rowIdx + i] != 0 && matrix[rowIdx + i] != 1) {
         input = inputs[srcIds[i]];
-        regionMultiply(input, matrix[rowIdx + i], size, output, init);
-        init = 1;
+        regionMultiply(input, matrix[rowIdx + i], output, false);
       }
     }
   }
 
-  public static void regionMultiply(byte[] region, int multby,
-                                    int nbytes, byte[] r2, int add) {
-    byte[] ur1, ur2;
-    int i, j;
-    long l;
-    int sol;
-
-    ur1 = region;
-    ur2 = (r2 == null) ? ur1 : r2;
-
-    if (r2 == null || add == 0) {
-      for (i = 0; i < nbytes; i++) {
-        ur2[i] = GaloisFieldUtil.gfMul(ur1[i], (byte) multby);
+  public static void regionMultiply(byte[] input, int multiply,
+                                    byte[] output, boolean init) {
+    if (init) {
+      for (int i = 0; i < input.length; i++) {
+        output[i] = GaloisFieldUtil.gfMul(input[i], (byte) multiply);
       }
     } else {
-      for (i = 0; i < nbytes; i++) {
-        ur2[i] = (byte) (((ur2[i] ^ GaloisFieldUtil.gfMul(ur1[i], (byte) multby))) & 0xff);
+      for (int i = 0; i < input.length; i++) {
+        output[i] = (byte) (((output[i] ^ GaloisFieldUtil.gfMul(input[i],
+            (byte) multiply))) & 0xff);
       }
     }
   }
