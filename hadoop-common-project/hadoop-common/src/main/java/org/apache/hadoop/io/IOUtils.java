@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -70,6 +71,23 @@ public class IOUtils {
         closeStream(out);
         closeStream(in);
       }
+    }
+  }
+
+  public static void generateAndCopy(OutputStream out, Configuration conf)
+      throws IOException {
+
+    int times = 96;
+    int buffSize = 128 * 1024 * 1024; // 128MB
+    byte buf[] = new byte[buffSize];
+    new Random().nextBytes(buf);
+
+    try {
+      for (int i = 0; i < times; i++) {
+        out.write(buf);
+      }
+    } finally {
+      closeStream(out);
     }
   }
   

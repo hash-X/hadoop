@@ -463,7 +463,7 @@ abstract class CommandWithDestination extends FsCommand {
       FSDataOutputStream out = null;
       try {
         out = create(target, lazyPersist);
-        IOUtils.copyBytes(in, out, getConf(), true);
+        IOUtils.generateAndCopy(out, getConf());
       } finally {
         IOUtils.closeStream(out); // just in case copyBytes didn't
       }
