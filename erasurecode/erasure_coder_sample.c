@@ -52,6 +52,7 @@ int main(int argc, char *argv[]) {
   DecoderState* pDecoder;
   unsigned char* decodingOutput[2];
   unsigned char** backupUnits;
+  int cache = 0;
 
   load_erasurecode_lib(errMsg, sizeof(errMsg));
   if (strlen(errMsg) > 0) {
@@ -61,13 +62,14 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  if (argc != 3) usage(NULL);
+  if (argc < 3) usage(NULL);
   if (sscanf(argv[1], "%d", &numDataUnits) == 0 || numDataUnits <= 0) {
     usage("Invalid numDataUnits");
   }
   if (sscanf(argv[2], "%d", &numParityUnits) == 0 || numParityUnits <= 0) {
     usage("Invalid numParityUnits");
   }
+  if (argv[3] != NULL) cache = 1;
 
   dataUnits = (unsigned char**)malloc(sizeof(unsigned char*) * numDataUnits);
   parityUnits = (unsigned char**)malloc(sizeof(unsigned char*) * numParityUnits);
@@ -117,8 +119,8 @@ int main(int argc, char *argv[]) {
   decodingOutput[0] = malloc(chunkSize);
   decodingOutput[1] = malloc(chunkSize);
 
-  pDecoder->cache = 1;
-  for (i = 0; i < 1000000; i++) {
+  pDecoder->cache = cache;
+  for (i = 0; i < 200000000; i++) {
     decode(pDecoder, allUnits, erasedIndexes, 2, decodingOutput, chunkSize);
   }
 
