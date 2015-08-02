@@ -28,7 +28,7 @@
 # $Date: 2008/08/19 17:41:40 $
 
 CC = gcc
-CFLAGS = -g -I../include
+CFLAGS = -g -O0 -I../include
 LDFLAGS = -L../lib -lJerasure
 
 ALL =	jerasure_01 \

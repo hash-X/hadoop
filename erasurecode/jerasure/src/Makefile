@@ -1,5 +1,5 @@
 CC	= gcc
-CFLAGS	= -g -O3
+CFLAGS	= -g -O0
 OBJS  	= galois.o jerasure.o reed_sol.o cauchy.o liberation.o
 
 all: ../lib/libJerasure.so headers
