@@ -218,7 +218,7 @@ public final class ErasureCodeUtil {
   }
 
   public static void decodeData(int numDataunits, int numParityUnits,
-                                byte[] matrix, int row_k_ones, int[] erasures,
+                                byte[] matrix, int[] erasures,
                                 byte[][] inputs, byte[][] outputs) {
     int i, numErasedDataUnits;
     boolean[] erased;
