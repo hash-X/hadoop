@@ -174,7 +174,7 @@ int generateDecodeMatrix(DecoderState* pCoderState) {
   unsigned char s;
   int numDataUnits;
 
-   numDataUnits = ((CoderState*)pCoderState)->numDataUnits;
+  numDataUnits = ((CoderState*)pCoderState)->numDataUnits;
 
   // Construct matrix b by removing error rows
   for (i = 0; i < numDataUnits; i++) {

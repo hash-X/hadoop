@@ -152,21 +152,19 @@ public final class GaloisFieldUtil {
     }
 
     public static void gfInvertMatrix(byte[] inMatrix, byte[] outMatrix, int n) {
-        int i, j, k;
         byte temp;
 
         // Set outMatrix[] to the identity matrix
-        for (i = 0; i < n * n; i++) {
+        for (int i = 0; i < n * n; i++) {
             // memset(outMatrix, 0, n*n)
             outMatrix[i] = 0;
         }
-
-        for (i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++) {
             outMatrix[i * n + i] = 1;
         }
 
         // Inverse
-        for (i = 0; i < n; i++) {
+        for (int j, i = 0; i < n; i++) {
             // Check for 0 in pivot element
             if (inMatrix[i * n + i] == 0) {
                 // Find a row with non-zero in current column and swap
@@ -175,13 +173,12 @@ public final class GaloisFieldUtil {
                         break;
                     }
                 }
-
                 if (j == n) {
                     // Couldn't find means it's singular
                     throw new RuntimeException("Not invertble");
                 }
 
-                for (k = 0; k < n; k++) {
+                for (int k = 0; k < n; k++) {
                     // Swap rows i,j
                     temp = inMatrix[i * n + k];
                     inMatrix[i * n + k] = inMatrix[j * n + k];
@@ -206,7 +203,7 @@ public final class GaloisFieldUtil {
                 }
 
                 temp = inMatrix[j * n + i];
-                for (k = 0; k < n; k++) {
+                for (int k = 0; k < n; k++) {
                     outMatrix[j * n + k] ^= gfMul(temp, outMatrix[i * n + k]);
                     inMatrix[j * n + k] ^= gfMul(temp, inMatrix[i * n + k]);
                 }
