@@ -56,6 +56,7 @@ public final class DumpUtil {
 
   public static void dumpMatrix_JE(byte[] matrix,
                                 int numDataUnits, int numParityUnits) {
+    System.out.println();
     for (int i = 0; i < numParityUnits; i++) {
       for (int j = 0; j < numDataUnits; j++) {
         if (j != 0) {

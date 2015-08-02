@@ -121,7 +121,8 @@ int main(int argc, char **argv)
   char **data, **coding;
   int *erasures, *erased;
   int *decoding_matrix, *dm_ids;
-  
+
+/*
   if (argc != 5) usage(NULL);
   if (sscanf(argv[1], "%d", &k) == 0 || k <= 0) usage("Bad k");
   if (sscanf(argv[2], "%d", &m) == 0 || m <= 0) usage("Bad m");
@@ -130,7 +131,9 @@ int main(int argc, char **argv)
   if (w < 32 && k + m > (1 << w)) usage("k + m must be <= 2 ^ w");
   if (sscanf(argv[4], "%d", &size) == 0 || size % sizeof(long) != 0) 
 		usage("size must be multiple of sizeof(long)");
+*/
 
+  k = 6; m = 3; w = 8; size = 16;
   matrix = talloc(int, m*k);
   for (i = 0; i < m; i++) {
     for (j = 0; j < k; j++) {
@@ -164,6 +167,7 @@ int main(int argc, char **argv)
 
   erasures = talloc(int, (m+1));
   erased = talloc(int, (k+m));
+/*
   for (i = 0; i < m+k; i++) erased[i] = 0;
   l = 0;
   i = 0;
@@ -173,14 +177,14 @@ int main(int argc, char **argv)
   i++;
   erasures[i] = -1;
 
-  printf("Erased %d random devices:\n\n", m);
+  printf("Erased %d random devices:\n\n", 1);
   print_data_and_coding(k, m, w, size, data, coding);
   
   i = jerasure_matrix_decode(k, m, w, matrix, 0, erasures, data, coding, size);
 
   printf("State of the system after decoding:\n\n");
   print_data_and_coding(k, m, w, size, data, coding);
-  
+*/
   decoding_matrix = talloc(int, k*k);
   dm_ids = talloc(int, k);
 

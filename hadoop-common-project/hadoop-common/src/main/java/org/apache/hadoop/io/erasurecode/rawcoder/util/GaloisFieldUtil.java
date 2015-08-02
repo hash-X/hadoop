@@ -284,6 +284,7 @@ public final class GaloisFieldUtil {
         }
       }
     }
+    DumpUtil.dumpMatrix_JE(outMatrix, rows, rows);
 
   /* Now the matrix is upper triangular.  Start at the top and multiply down  */
 

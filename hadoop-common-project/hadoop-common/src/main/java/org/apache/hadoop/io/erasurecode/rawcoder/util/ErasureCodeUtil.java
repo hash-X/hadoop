@@ -172,20 +172,20 @@ public final class ErasureCodeUtil {
     }
   }
 
-  public static void decodeDotprod(int numDataUnits, byte[] matrix, int rowIdx, int[] srcIds,
-                             byte[][] inputs, byte[] output) {
+  public static void decodeDotprod(int numDataUnits, byte[] matrix, int matrixOffset,
+                                   int[] validIndexes, byte[][] inputs, byte[] output) {
     byte[] input;
     int size = 513; //inputs[0].length;
     int i;
 
     //First copy or xor any data that does not need to be multiplied by a factor
-    int init = 0;
+    boolean init = true;
     for (i = 0; i < numDataUnits; i++) {
-      if (matrix[rowIdx + i] == 1) {
-        input = inputs[srcIds[i]];
-        if (init == 0) {
+      if (matrix[matrixOffset + i] == 1) {
+        input = inputs[validIndexes[i]];
+        if (init) {
           System.arraycopy(input, 0, output, 0, size);
-          init = 1;
+          init = false;
         } else {
           for (int j = 0; j < size; j++) {
             output[j] ^= input[j];
@@ -196,9 +196,10 @@ public final class ErasureCodeUtil {
 
     //Now do the data that needs to be multiplied by a factor
     for (i = 0; i < numDataUnits; i++) {
-      if (matrix[rowIdx + i] != 0 && matrix[rowIdx + i] != 1) {
-        input = inputs[srcIds[i]];
-        regionMultiply(input, matrix[rowIdx + i], output, false);
+      if (matrix[matrixOffset + i] != 0 && matrix[matrixOffset + i] != 1) {
+        input = inputs[validIndexes[i]];
+        regionMultiply(input, matrix[matrixOffset + i], output, init);
+        init = true;
       }
     }
   }
@@ -217,43 +218,34 @@ public final class ErasureCodeUtil {
     }
   }
 
-  public static void decodeData(int numDataunits, int numParityUnits,
+  public static void decodeData(int numDataUnits, int numParityUnits,
                                 byte[] matrix, int[] erasures,
                                 byte[][] inputs, byte[][] outputs) {
-    int i, numErasedDataUnits;
-    boolean[] erased;
+    boolean[] erased = erasures2erased(numDataUnits, numParityUnits, erasures);
 
-    erased = erasures2erased(numDataunits, numParityUnits, erasures);
-
-    int[] validSourceIndexes = new int[numDataunits];
+    int[] validSourceIndexes = new int[numDataUnits];
     makeValidIndexes(inputs, validSourceIndexes);
 
-    //Find the number of data units failed
+    byte[] decodingMatrix = new byte[numDataUnits * numDataUnits];
+    makeDecodingMatrix(numDataUnits, numParityUnits, matrix, erased,
+        decodingMatrix, validSourceIndexes);
+    DumpUtil.dumpMatrix_JE(decodingMatrix, numDataUnits, numParityUnits);
 
-    numErasedDataUnits = 0;
-    for (i = 0; i < numDataunits; i++) {
-      if (erased[i]) {
-        numErasedDataUnits++;
-      }
-    }
-
-    byte[] decodingMatrix = new byte[numDataunits * numDataunits];
-    makeDecodingMatrix(numDataunits, numParityUnits, matrix, erased, decodingMatrix, validSourceIndexes);
-
-    int idx = 0; // For output
+    int outputIdx = 0;
 
     // Decode erased data units
-    for (i = 0; numErasedDataUnits > 0; i++) {
+    for (int i = 0; i < numDataUnits; i++) {
       if (erased[i]) {
-        decodeDotprod(numDataunits, decodingMatrix, i * numDataunits, validSourceIndexes, inputs, outputs[idx++]);
-        numErasedDataUnits--;
+        decodeDotprod(numDataUnits, decodingMatrix, i * numDataUnits,
+            validSourceIndexes, inputs, outputs[outputIdx++]);
       }
     }
 
-    // Finally, re-encode any erased coding devices
-    for (i = 0; i < numParityUnits; i++) {
-      if (erased[numDataunits+i]) {
-        encodeDotprod(numDataunits, matrix, i * numDataunits, inputs, outputs[idx++]);
+    // Decode erased parity units by re-encoding
+    for (int i = 0; i < numParityUnits; i++) {
+      if (erased[numDataUnits + i]) {
+        encodeDotprod(numDataUnits, matrix, i * numDataUnits,
+            inputs, outputs[outputIdx++]);
       }
     }
   }
@@ -385,6 +377,7 @@ public final class ErasureCodeUtil {
         }
       }
     }
+    DumpUtil.dumpMatrix_JE(tmpMatrix, numDataUnits, numDataUnits);
 
     GaloisFieldUtil.gfInvertMatrix_JE(tmpMatrix, decodingMatrix, numDataUnits);
   }
