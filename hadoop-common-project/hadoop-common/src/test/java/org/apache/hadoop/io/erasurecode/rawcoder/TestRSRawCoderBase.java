@@ -47,6 +47,7 @@ public abstract class TestRSRawCoderBase extends TestRawCoderBase {
   @Override
   protected byte[] generateFixedData(int len) {
     byte[] buffer = new byte[len];
+    RS_FIXED_DATA_GENERATOR = 0;
     for (int i = 0; i < buffer.length; i++) {
       buffer[i] = (byte) RS_FIXED_DATA_GENERATOR++;
       if (RS_FIXED_DATA_GENERATOR == symbolMax) {
