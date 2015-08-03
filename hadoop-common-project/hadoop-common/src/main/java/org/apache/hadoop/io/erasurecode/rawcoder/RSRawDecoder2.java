@@ -20,6 +20,7 @@ package org.apache.hadoop.io.erasurecode.rawcoder;
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.io.erasurecode.rawcoder.util.DumpUtil;
 import org.apache.hadoop.io.erasurecode.rawcoder.util.ErasureCodeUtil;
+import org.apache.hadoop.io.erasurecode.rawcoder.util.GaloisFieldUtil;
 import org.apache.hadoop.io.erasurecode.rawcoder.util.RSUtil;
 
 import java.nio.ByteBuffer;
@@ -32,15 +33,25 @@ import java.nio.ByteBuffer;
 public class RSRawDecoder2 extends AbstractRawErasureDecoder {
   private byte[] encodeMatrix;
 
+  private byte[] decodeMatrix;
+  private byte[] invertMatrix;
+  private byte[] b;
+  private byte[] gftbls;
+  private int[] validInputIndexes;
+  private int numErasedDataUnits;
+  private boolean[] erasureFlags;
+
   public RSRawDecoder2(int numDataUnits, int numParityUnits) {
     super(numDataUnits, numParityUnits);
     if (numDataUnits + numParityUnits >= RSUtil.GF.getFieldSize()) {
       throw new HadoopIllegalArgumentException(
               "Invalid numDataUnits and numParityUnits");
     }
-    encodeMatrix = new byte[numDataUnits * numParityUnits];
-    ErasureCodeUtil.genCauchyMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
-    DumpUtil.dumpMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
+
+    int numAllUnits = numDataUnits + numParityUnits;
+    encodeMatrix = new byte[numAllUnits * numDataUnits];
+    ErasureCodeUtil.genCauchyMatrix(encodeMatrix, numAllUnits, numDataUnits);
+    DumpUtil.dumpMatrix(encodeMatrix, numDataUnits, numAllUnits);
   }
 
   @Override
@@ -53,7 +64,86 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
   protected void doDecode(byte[][] inputs, int[] inputOffsets,
                           int dataLen, int[] erasedIndexes,
                           byte[][] outputs, int[] outputOffsets) {
-    ErasureCodeUtil.decodeData_JE(getNumDataUnits(), getNumParityUnits(),
-        encodeMatrix, erasedIndexes, inputs, outputs);
+    int numAllUnits = numDataUnits + numParityUnits;
+    decodeMatrix = new byte[numAllUnits * numDataUnits];
+    b = new byte[numAllUnits * numDataUnits];
+    invertMatrix = new byte[numAllUnits * numDataUnits];
+    gftbls = new byte[numAllUnits * getNumDataUnits() * 32];
+    validInputIndexes = new int[numDataUnits];
+    erasureFlags = new boolean[numAllUnits];
+
+    for (int i = 0, r = 0; i < numDataUnits; i++, r++) {
+      while (inputs[r] == null) {
+        r++;
+      }
+      validInputIndexes[i] = r;
+    }
+
+    processErasures(erasedIndexes);
+
+    // Generate decode matrix
+    generateDecodeMatrix(erasedIndexes);
+
+    // Pack recovery array as list of valid sources
+    // Its order must be the same as the order
+    // to generate matrix b in gf_gen_decode_matrix
+    byte[][] realInputs = new byte[numDataUnits][];
+    for (int i = 0; i < numDataUnits; i++) {
+      realInputs[i] = inputs[validInputIndexes[i]];
+    }
+
+      // Recover data
+    ErasureCodeUtil.initTables(numDataUnits, erasedIndexes.length,
+        decodeMatrix, 0, gftbls);
+    System.out.println(DumpUtil.bytesToHex(gftbls, 9999999));
+    ErasureCodeUtil.encodeData(numDataUnits, erasedIndexes.length,
+        gftbls, realInputs, outputs);
   }
+
+  private void processErasures(int[] erasedIndexes) {
+    int i, index;
+
+    for (i = 0; i < erasedIndexes.length; i++) {
+      index = erasedIndexes[i];
+      erasureFlags[index] = true;
+      if (index < numDataUnits) {
+        numErasedDataUnits++;
+      }
+    }
+  }
+
+  // Generate decode matrix from encode matrix
+  private void generateDecodeMatrix(int[] erasedIndexes) {
+    int i, j, r, p;
+    byte s;
+
+    // Construct matrix b by removing error rows
+    for (i = 0; i < numDataUnits; i++) {
+      r = validInputIndexes[i];
+      for (j = 0; j < numDataUnits; j++) {
+        b[numDataUnits * i + j] = encodeMatrix[numDataUnits * r + j];
+      }
+    }
+
+    GaloisFieldUtil.gfInvertMatrix(b, invertMatrix, numDataUnits);
+
+    for (i = 0; i < numErasedDataUnits; i++) {
+      for (j = 0; j < numDataUnits; j++) {
+        decodeMatrix[numDataUnits * i + j] = invertMatrix[numDataUnits *
+                erasedIndexes[i] + j];
+      }
+    }
+
+    for (p = numErasedDataUnits; p < erasedIndexes.length; p++) {
+      for (i = 0; i < numDataUnits; i++) {
+        s = 0;
+        for (j = 0; j < numDataUnits; j++)
+          s ^= GaloisFieldUtil.gfMul(invertMatrix[j * numDataUnits + i],
+              encodeMatrix[numDataUnits * erasedIndexes[p] + j]);
+
+        decodeMatrix[numDataUnits * p + i] = s;
+      }
+    }
+  }
+
 }

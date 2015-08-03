@@ -319,54 +319,78 @@ public final class GaloisFieldUtil {
     }
   }
 
-    /*
-  public static void ec_init_tables(int k, int rows, byte[] a, byte[] gf_tbls) {
-    int i, j;
-
-    for (i = 0; i < rows; i++) {
-      for (j = 0; j < k; j++) {
-        gfVectMulInit(*a++, gf_tbls);
-        g_tbls += 32;
-      }
-    }
-  }
-
   // Calculates const table gftbl in GF(2^8) from single input A
   // gftbl(A) = {A{00}, A{01}, A{02}, ... , A{0f} }, {A{00}, A{10}, A{20}, ... , A{f0} }
 
-  public static void gfVectMulInit(byte c, byte[] tbl) {
-    byte c2 = (c << 1) ^ ((c & 0x80) ? 0x1d : 0); //Mult by GF{2}
-    byte c4 = (c2 << 1) ^ ((c2 & 0x80) ? 0x1d : 0); //Mult by GF{2}
-    byte c8 = (c4 << 1) ^ ((c4 & 0x80) ? 0x1d : 0); //Mult by GF{2}
+  public static void gfVectMulInit(byte c, byte[] tbl, int offset) {
+    byte c2 = (byte) ((c << 1) ^ ((c & 0x80) != 0 ? 0x1d : 0)); //Mult by GF{2}
+    byte c4 = (byte) ((c2 << 1) ^ ((c2 & 0x80) != 0 ? 0x1d : 0)); //Mult by GF{2}
+    byte c8 = (byte) ((c4 << 1) ^ ((c4 & 0x80) != 0 ? 0x1d : 0)); //Mult by GF{2}
 
-    long v1, v2, v4, v8;
-    long v10, v20, v40, v80;
-    byte c17, c18, c20, c24;
-    long[] t = new long[] {0}; // Converted from tbl
+    byte c3, c5, c6, c7, c9, c10, c11, c12, c13, c14, c15;
+    byte c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31;
 
-    v1 = c * 0x0100010001000100L;
-    v2 = c2 * 0x0101000001010000L;
-    v4 = c4 * 0x0101010100000000L;
-    v8 = c8 * 0x0101010101010101L;
+    c3 = (byte) (c2 ^ c);
+    c5 = (byte) (c4 ^ c);
+    c6 = (byte) (c4 ^ c2);
+    c7 = (byte) (c4 ^ c3);
 
-    v4 = v1 ^ v2 ^ v4;
-    t[0] = v4;
-    t[1] = v8 ^ v4;
+    c9 = (byte) (c8 ^ c);
+    c10 = (byte) (c8 ^ c2);
+    c11 = (byte) (c8 ^ c3);
+    c12 = (byte) (c8 ^ c4);
+    c13 = (byte) (c8 ^ c5);
+    c14 = (byte) (c8 ^ c6);
+    c15 = (byte) (c8 ^ c7);
 
-    c17 = (c8 << 1) ^ ((c8 & 0x80) ? 0x1d : 0); //Mult by GF{2}
-    c18 = (c17 << 1) ^ ((c17 & 0x80) ? 0x1d : 0); //Mult by GF{2}
-    c20 = (c18 << 1) ^ ((c18 & 0x80) ? 0x1d : 0); //Mult by GF{2}
-    c24 = (c20 << 1) ^ ((c20 & 0x80) ? 0x1d : 0); //Mult by GF{2}
+    tbl[offset + 0] = 0;
+    tbl[offset + 1] = c;
+    tbl[offset + 2] = c2;
+    tbl[offset + 3] = c3;
+    tbl[offset + 4] = c4;
+    tbl[offset + 5] = c5;
+    tbl[offset + 6] = c6;
+    tbl[offset + 7] = c7;
+    tbl[offset + 8] = c8;
+    tbl[offset + 9] = c9;
+    tbl[offset + 10] = c10;
+    tbl[offset + 11] = c11;
+    tbl[offset + 12] = c12;
+    tbl[offset + 13] = c13;
+    tbl[offset + 14] = c14;
+    tbl[offset + 15] = c15;
 
-    v10 = c17 * 0x0100010001000100L;
-    v20 = c18 * 0x0101000001010000L;
-    v40 = c20 * 0x0101010100000000L;
-    v80 = c24 * 0x0101010101010101L;
+    c17 = (byte) ((c8 << 1) ^ ((c8 & 0x80) != 0 ? 0x1d : 0));	//Mult by GF{2}
+    c18 = (byte) ((c17 << 1) ^ ((c17 & 0x80) != 0 ? 0x1d : 0));	//Mult by GF{2}
+    c19 = (byte) (c18 ^ c17);
+    c20 = (byte) ((c18 << 1) ^ ((c18 & 0x80) != 0 ? 0x1d : 0));	//Mult by GF{2}
+    c21 = (byte) (c20 ^ c17);
+    c22 = (byte) (c20 ^ c18);
+    c23 = (byte) (c20 ^ c19);
+    c24 = (byte) ((c20 << 1) ^ ((c20 & 0x80) != 0 ? 0x1d : 0));	//Mult by GF{2}
+    c25 = (byte) (c24 ^ c17);
+    c26 = (byte) (c24 ^ c18);
+    c27 = (byte) (c24 ^ c19);
+    c28 = (byte) (c24 ^ c20);
+    c29 = (byte) (c24 ^ c21);
+    c30 = (byte) (c24 ^ c22);
+    c31 = (byte) (c24 ^ c23);
 
-    v40 = v10 ^ v20 ^ v40;
-    t[2] = v40;
-    t[3] = v80 ^ v40;
-
+    tbl[offset + 16] = 0;
+    tbl[offset + 17] = c17;
+    tbl[offset + 18] = c18;
+    tbl[offset + 19] = c19;
+    tbl[offset + 20] = c20;
+    tbl[offset + 21] = c21;
+    tbl[offset + 22] = c22;
+    tbl[offset + 23] = c23;
+    tbl[offset + 24] = c24;
+    tbl[offset + 25] = c25;
+    tbl[offset + 26] = c26;
+    tbl[offset + 27] = c27;
+    tbl[offset + 28] = c28;
+    tbl[offset + 29] = c29;
+    tbl[offset + 30] = c30;
+    tbl[offset + 31] = c31;
   }
-    */
 }

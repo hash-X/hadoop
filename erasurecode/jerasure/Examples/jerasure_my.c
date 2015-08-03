@@ -149,10 +149,10 @@ int main(int argc, char **argv)
   data = talloc(char *, k);
   for (i = 0; i < k; i++) {
     data[i] = talloc(char, size);
-	for(j = 0; j < size; j+=sizeof(long)) {
-		l = lrand48();
-		memcpy(data[i] + j, &l, sizeof(long));
-	}
+    int gen = 0;
+    for(j = 0; j < size; j++) {
+      data[i][j] = gen++;
+    }
   }
 
   coding = talloc(char *, m);
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
 
   erasures = talloc(int, (m+1));
   erased = talloc(int, (k+m));
-/*
+
   for (i = 0; i < m+k; i++) erased[i] = 0;
   l = 0;
   i = 0;
@@ -184,16 +184,17 @@ int main(int argc, char **argv)
 
   printf("State of the system after decoding:\n\n");
   print_data_and_coding(k, m, w, size, data, coding);
-*/
+
   decoding_matrix = talloc(int, k*k);
   dm_ids = talloc(int, k);
 
-  for (i = 0; i < m; i++) erased[i] = 1;
-  for (; i < k+m; i++) erased[i] = 0;
+  //for (i = 0; i < m; i++) erased[i] = 1;
+  erased[0] = 1;
+  for (i = 1; i < k+m; i++) erased[i] = 0;
 
   jerasure_make_decoding_matrix(k, m, w, matrix, erased, decoding_matrix, dm_ids);
 
-  printf("Suppose we erase the first %d devices.  Here is the decoding matrix:\n\n", m);
+  printf("Suppose we erase the first %d devices.  Here is the decoding matrix:\n\n", 1);
   jerasure_print_matrix(decoding_matrix, k, k, w);
   printf("\n");
   printf("And dm_ids:\n\n");

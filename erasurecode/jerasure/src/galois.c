@@ -441,7 +441,7 @@ void galois_w08_region_multiply(char *region,      /* Region to multiply */
   ur1 = (unsigned char *) region;
   ur2 = (r2 == NULL) ? ur1 : (unsigned char *) r2;
 
-/* This is used to test its performance with respect to just calling galois_single_multiply 
+  //This is used to test its performance with respect to just calling galois_single_multiply
   if (r2 == NULL || !add) {
     for (i = 0; i < nbytes; i++) ur2[i] = galois_single_multiply(ur1[i], multby, 8);
   } else {
@@ -449,8 +449,8 @@ void galois_w08_region_multiply(char *region,      /* Region to multiply */
       ur2[i] = (ur2[i]^galois_single_multiply(ur1[i], multby, 8));
     }
   }
- */
 
+  /*
   if (galois_mult_tables[8] == NULL) {
     if (galois_create_mult_tables(8) < 0) {
       fprintf(stderr, "galois_08_region_multiply -- couldn't make multiplication tables\n");
@@ -476,7 +476,7 @@ void galois_w08_region_multiply(char *region,      /* Region to multiply */
       }
       *lp2 = (*lp2) ^ l;
     }
-  }
+  }*/
   return;
 }
 

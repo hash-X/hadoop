@@ -24,13 +24,15 @@ public final class ErasureCodeUtil {
 
   private ErasureCodeUtil() { }
 
-  public static void initTables(int k, int rows, byte[] a, byte[] gftbls) {
+  public static void initTables(int k, int rows, byte[] codingMatrix,
+                                int matrixOffset, byte[] gftbls) {
     int i, j;
 
+    int offset = 0, idx = matrixOffset;
     for (i = 0; i < rows; i++) {
       for (j = 0; j < k; j++) {
-        //GaloisFieldUtil.gfVectMulInit(*a++, gftbls);
-        //gftbls += 32;
+        GaloisFieldUtil.gfVectMulInit(codingMatrix[idx++], gftbls, offset);
+        offset += 32;
       }
     }
   }
@@ -87,55 +89,30 @@ public final class ErasureCodeUtil {
     }
   }
 
-  public static void encodeData(int numDataUnits, int numParityUnits, byte[] matrix,
+  public static void encodeData(int numDataUnits, int numParityUnits, byte[] gftbls,
+                                byte[][] inputs, byte[][] outputs) {
+    ec_encode_data(16, numDataUnits, numParityUnits, gftbls, inputs, outputs);
+  }
+
+  public static void encodeData_JE(int numDataUnits, int numParityUnits, byte[] matrix,
                                 byte[][] inputs, byte[][] outputs) {
     for (int i = 0; i < numParityUnits; i++) {
       encodeDotprod(numDataUnits, matrix, i * numDataUnits, inputs, outputs[i]);
     }
   }
 
-  public static void dotprod(int numDataUnits, byte[] matrix, int rowIdx, int[] srcIds,
-                             int destId, byte[][] inputs, byte[][] outputs) {
-    byte[] output, input;
-    int size = 16; //inputs[0].length;
-    int i;
+  private static void ec_encode_data(int len, int srcs, int dests, byte[] v,
+                           byte[][] src, byte[][] dest) {
+    int i, j, l;
+    byte s;
 
-    output = (destId < numDataUnits) ? inputs[destId] : outputs[destId - numDataUnits];
+    for (l = 0; l < dests; l++) {
+      for (i = 0; i < len; i++) {
+        s = 0;
+        for (j = 0; j < srcs; j++)
+          s ^= GaloisFieldUtil.gfMul(src[j][i], v[j * 32 + l * srcs * 32 + 1]);
 
-    //First copy or xor any data that does not need to be multiplied by a factor
-    int init = 0;
-    for (i = 0; i < numDataUnits; i++) {
-      if (matrix[rowIdx + i] == 1) {
-        if (srcIds == null) {
-          input = inputs[i];
-        } else if (srcIds[i] < numDataUnits) {
-          input = inputs[srcIds[i]];
-        } else {
-          input = outputs[srcIds[i]-numDataUnits];
-        }
-        if (init == 0) {
-          System.arraycopy(input, 0, output, 0, size);
-          init = 1;
-        } else {
-          for (int j = 0; j < size; j++) {
-            output[j] ^= input[j];
-          }
-        }
-      }
-    }
-
-    //Now do the data that needs to be multiplied by a factor
-    for (i = 0; i < numDataUnits; i++) {
-      if (matrix[rowIdx + i] != 0 && matrix[rowIdx + i] != 1) {
-        if (srcIds == null) {
-          input = inputs[i];
-        } else if (srcIds[i] < numDataUnits) {
-          input = inputs[srcIds[i]];
-        } else {
-          input = outputs[srcIds[i]-numDataUnits];
-        }
-        regionMultiply(input, matrix[rowIdx + i], output, false);
-        init = 1;
+        dest[l][i] = s;
       }
     }
   }

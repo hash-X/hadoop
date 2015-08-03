@@ -102,12 +102,19 @@ int jerasure_make_decoding_matrix(int k, int m, int w, int *matrix, int *erased,
   int i, j, *tmpmat;
 
   j = 0;
+  /*
   for (i = 0; j < k; i++) {
     if (erased[i] == 0) {
       dm_ids[j] = i;
       j++;
     }
-  }
+  }*/
+  dm_ids[0] = 3;
+  dm_ids[1] = 4;
+  dm_ids[2] = 5;
+  dm_ids[3] = 6;
+  dm_ids[4] = 7;
+  dm_ids[5] = 8;
 
   tmpmat = talloc(int, k*k);
   if (tmpmat == NULL) { return -1; }
@@ -372,6 +379,12 @@ void jerasure_do_parity(int k, char **data_ptrs, char *parity_ptr, int size)
   }
 }
 
+int single_multiply(int x, int y, int w)
+{
+  int result = galois_single_multiply(x, y, w);
+  return result;
+}
+
 int jerasure_invert_matrix(int *mat, int *inv, int rows, int w)
 {
   int cols, i, j, k, x, rs2;
@@ -413,8 +426,8 @@ int jerasure_invert_matrix(int *mat, int *inv, int rows, int w)
     if (tmp != 1) {
       inverse = galois_single_divide(1, tmp, w);
       for (j = 0; j < cols; j++) { 
-        mat[row_start+j] = galois_single_multiply(mat[row_start+j], inverse, w);
-        inv[row_start+j] = galois_single_multiply(inv[row_start+j], inverse, w);
+        mat[row_start+j] = single_multiply(mat[row_start+j], inverse, w);
+        inv[row_start+j] = single_multiply(inv[row_start+j], inverse, w);
       }
     }
 
@@ -433,8 +446,8 @@ int jerasure_invert_matrix(int *mat, int *inv, int rows, int w)
           tmp = mat[k];
           rs2 = cols*j;
           for (x = 0; x < cols; x++) {
-            mat[rs2+x] ^= galois_single_multiply(tmp, mat[row_start+x], w);
-            inv[rs2+x] ^= galois_single_multiply(tmp, inv[row_start+x], w);
+            mat[rs2+x] ^= single_multiply(tmp, mat[row_start+x], w);
+            inv[rs2+x] ^= single_multiply(tmp, inv[row_start+x], w);
           }
         }
       }
@@ -451,7 +464,7 @@ int jerasure_invert_matrix(int *mat, int *inv, int rows, int w)
         tmp = mat[rs2+i];
         mat[rs2+i] = 0; 
         for (k = 0; k < cols; k++) {
-          inv[rs2+k] ^= galois_single_multiply(tmp, inv[row_start+k], w);
+          inv[rs2+k] ^= single_multiply(tmp, inv[row_start+k], w);
         }
       }
     }

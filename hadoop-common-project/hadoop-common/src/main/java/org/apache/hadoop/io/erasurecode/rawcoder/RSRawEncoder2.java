@@ -31,6 +31,7 @@ import java.nio.ByteBuffer;
  */
 public class RSRawEncoder2 extends AbstractRawErasureEncoder {
   private byte[] encodeMatrix;
+  private byte[] gftbls;
 
   public RSRawEncoder2(int numDataUnits, int numParityUnits) {
     super(numDataUnits, numParityUnits);
@@ -40,9 +41,14 @@ public class RSRawEncoder2 extends AbstractRawErasureEncoder {
           "Invalid numDataUnits and numParityUnits");
     }
 
-    encodeMatrix = new byte[numDataUnits * numParityUnits];
-    ErasureCodeUtil.genCauchyMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
-    DumpUtil.dumpMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
+    int numAllUnits = numDataUnits + numParityUnits;
+    encodeMatrix = new byte[numAllUnits * numDataUnits];
+    ErasureCodeUtil.genCauchyMatrix(encodeMatrix, numAllUnits, numDataUnits);
+    DumpUtil.dumpMatrix(encodeMatrix, numDataUnits, numAllUnits);
+    gftbls = new byte[numAllUnits * numDataUnits * 32];
+    ErasureCodeUtil.initTables(numDataUnits, numParityUnits, encodeMatrix,
+        numDataUnits * numDataUnits, gftbls);
+    //System.out.println(DumpUtil.bytesToHex(gftbls, 9999999));
   }
 
   @Override
@@ -52,9 +58,8 @@ public class RSRawEncoder2 extends AbstractRawErasureEncoder {
 
   @Override
   protected void doEncode(byte[][] inputs, int[] inputOffsets,
-                          int dataLen, byte[][] outputs,
-                          int[] outputOffsets) {
+                          int dataLen, byte[][] outputs, int[] outputOffsets) {
     ErasureCodeUtil.encodeData(getNumDataUnits(), getNumParityUnits(),
-        encodeMatrix, inputs, outputs);
+        gftbls, inputs, outputs);
   }
 }

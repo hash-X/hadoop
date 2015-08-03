@@ -31,8 +31,8 @@ import java.util.Arrays;
 public abstract class AbstractRawErasureCoder
     extends Configured implements RawErasureCoder {
 
-  private final int numDataUnits;
-  private final int numParityUnits;
+  protected final int numDataUnits;
+  protected final int numParityUnits;
 
   public AbstractRawErasureCoder(int numDataUnits, int numParityUnits) {
     this.numDataUnits = numDataUnits;
