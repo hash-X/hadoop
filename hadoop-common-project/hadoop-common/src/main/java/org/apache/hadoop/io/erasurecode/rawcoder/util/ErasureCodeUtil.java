@@ -124,30 +124,55 @@ public final class ErasureCodeUtil {
     }
   }
 
-  public static void encodeDotprod(int numDataUnits, byte[] matrix,
-                                   int matrixOffset, byte[][] inputs, byte[] output) {
-    byte[] input;
-    int size = 16; //inputs[0].length;
-    int i;
-
+  public static void encodeDotprod(byte[] matrix, int matrixOffset, byte[][] inputs,
+                                   int[] inputOffsets, int dataLen,
+                                   byte[] output, int outputOffset) {
     //First copy or xor any data that does not need to be multiplied by a factor
     boolean init = true;
-    for (i = 0; i < numDataUnits; i++) {
+    for (int i = 0; i < inputs.length; i++) {
       if (matrix[matrixOffset + i] == 1) {
-        input = inputs[i];
         if (init) {
-          System.arraycopy(input, 0, output, 0, size);
+          System.arraycopy(inputs[i], inputOffsets[i], output, 0, dataLen);
           init = false;
         } else {
-          for (int j = 0; j < size; j++) {
-            output[j] ^= input[j];
+          for (int j = 0; j < dataLen; j++) {
+            output[outputOffset + j] ^= inputs[i][inputOffsets[i] + j];
           }
         }
       }
     }
 
     //Now do the data that needs to be multiplied by a factor
-    for (i = 0; i < numDataUnits; i++) {
+    for (int i = 0; i < inputs.length; i++) {
+      if (matrix[matrixOffset + i] != 0 && matrix[matrixOffset + i] != 1) {
+        regionMultiply(inputs[i], inputOffsets[i], dataLen, matrix[matrixOffset + i],
+            output, outputOffset, init);
+        init = false;
+      }
+    }
+  }
+
+  public static void encodeDotprod(byte[] matrix, int matrixOffset,
+                                   ByteBuffer[] inputs, ByteBuffer output) {
+    ByteBuffer input;
+    //First copy or xor any data that does not need to be multiplied by a factor
+    boolean init = true;
+    for (int i = 0; i < inputs.length; i++) {
+      if (matrix[matrixOffset + i] == 1) {
+        input = inputs[i];
+        if (init) {
+          output.put(input);
+          init = false;
+        } else {
+          for (int j = 0; j < input.remaining(); j++) {
+            output.put(j, (byte) ((output.get(j) ^ input.get(j)) & 0xff));
+          }
+        }
+      }
+    }
+
+    //Now do the data that needs to be multiplied by a factor
+    for (int i = 0; i < inputs.length; i++) {
       if (matrix[matrixOffset + i] != 0 && matrix[matrixOffset + i] != 1) {
         input = inputs[i];
         regionMultiply(input, matrix[matrixOffset + i], output, init);
@@ -156,6 +181,7 @@ public final class ErasureCodeUtil {
     }
   }
 
+  /*
   public static void decodeDotprod(int numDataUnits, byte[] matrix, int matrixOffset,
                                    int[] validIndexes, byte[][] inputs, byte[] output) {
     byte[] input;
@@ -186,49 +212,33 @@ public final class ErasureCodeUtil {
         init = false;
       }
     }
-  }
+  }*/
 
-  public static void regionMultiply(byte[] input, byte multiply,
-                                    byte[] output, boolean init) {
+  public static void regionMultiply(byte[] input, int inputOffset, int dataLen,
+                                    byte multiply, byte[] output, int outputOffset,
+                                    boolean init) {
     if (init) {
-      for (int i = 0; i < input.length; i++) {
-        output[i] = GaloisFieldUtil.gfMul(input[i], multiply);
+      for (int i = 0; i < dataLen; i++) {
+        output[outputOffset + i] = GaloisFieldUtil.gfMul(input[inputOffset + i], multiply);
       }
     } else {
-      for (int i = 0; i < input.length; i++) {
-        byte tmp = GaloisFieldUtil.gfMul(input[i], multiply);
-        output[i] = (byte) ((output[i] ^ tmp) & 0xff);
+      for (int i = 0; i < dataLen; i++) {
+        byte tmp = GaloisFieldUtil.gfMul(input[inputOffset + i], multiply);
+        output[outputOffset + i] = (byte) ((output[outputOffset + i] ^ tmp) & 0xff);
       }
     }
   }
 
-  public static void decodeData_JE(int numDataUnits, int numParityUnits,
-                                byte[] matrix, int[] erasures,
-                                byte[][] inputs, byte[][] outputs) {
-
-  }
-
-  // Generate decode matrix from encode matrix
-  public static void makeDecodingMatrix(int numDataUnits, byte[] encodeMatrix,
-                           byte[] decodingMatrix, int[] erasedIndexes,
-                           int[] validIndexes, int numErasedDataUnits) {
-    byte[] tmpMatrix = new byte[9 * numDataUnits];
-    byte[] invertMatrix = new byte[9 * numDataUnits];
-
-    // Construct matrix b by removing error rows
-    for (int i = 0; i < numDataUnits; i++) {
-      for (int j = 0; j < numDataUnits; j++) {
-        tmpMatrix[numDataUnits * i + j] =
-            encodeMatrix[numDataUnits * validIndexes[i] + j];
+  public static void regionMultiply(ByteBuffer input, byte multiply,
+                                    ByteBuffer output, boolean init) {
+    if (init) {
+      for (int i = 0; i < input.limit(); i++) {
+        output.put(i, GaloisFieldUtil.gfMul(input.get(i), multiply));
       }
-    }
-
-    GaloisFieldUtil.gfInvertMatrix(tmpMatrix, invertMatrix, numDataUnits);
-
-    for (int i = 0; i < numErasedDataUnits; i++) {
-      for (int j = 0; j < numDataUnits; j++) {
-        decodingMatrix[numDataUnits * i + j] =
-            invertMatrix[numDataUnits * erasedIndexes[i] + j];
+    } else {
+      for (int i = 0; i < input.limit(); i++) {
+        byte tmp = GaloisFieldUtil.gfMul(input.get(i), multiply);
+        output.put(i, (byte) ((output.get(i) ^ tmp) & 0xff));
       }
     }
   }

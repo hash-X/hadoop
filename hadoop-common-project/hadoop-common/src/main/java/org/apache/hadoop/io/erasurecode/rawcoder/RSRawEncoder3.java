@@ -48,7 +48,7 @@ public class RSRawEncoder3 extends AbstractRawErasureEncoder {
   @Override
   protected void doEncode(ByteBuffer[] inputs, ByteBuffer[] outputs) {
     for (int i = 0; i < numParityUnits; i++) {
-      ErasureCodeUtil.encodeDotprod(numDataUnits, encodeMatrix, i * numDataUnits,
+      ErasureCodeUtil.encodeDotprod(encodeMatrix, i * numDataUnits,
           inputs, outputs[i]);
     }
   }
@@ -57,8 +57,8 @@ public class RSRawEncoder3 extends AbstractRawErasureEncoder {
   protected void doEncode(byte[][] inputs, int[] inputOffsets, int dataLen,
                           byte[][] outputs, int[] outputOffsets) {
     for (int i = 0; i < numParityUnits; i++) {
-      ErasureCodeUtil.encodeDotprod(numDataUnits, encodeMatrix, i * numDataUnits,
-          inputs, outputs[i]);
+      ErasureCodeUtil.encodeDotprod(encodeMatrix, i * numDataUnits,
+          inputs, inputOffsets, dataLen, outputs[i], outputOffsets[i]);
     }
   }
 }
