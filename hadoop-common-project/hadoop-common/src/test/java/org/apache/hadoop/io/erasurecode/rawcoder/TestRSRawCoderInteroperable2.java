@@ -18,18 +18,17 @@
 package org.apache.hadoop.io.erasurecode.rawcoder;
 
 import org.junit.Before;
-import org.junit.Test;
 
 /**
  * Test raw Reed-solomon coder implemented in Java.
  */
-public class TestRSRawCoder extends TestRSRawCoderBase {
+public class TestRSRawCoderInteroperable2 extends TestRSRawCoderBase {
 
   @Before
   public void setup() {
-    this.encoderClass = RSRawEncoder.class;
-    this.decoderClass = RSRawDecoder.class;
-    setAllowDump(false); // Change to true to allow verbose dump for debugging
+    this.encoderClass = NativeRSRawEncoder.class;
+    this.decoderClass = RSRawDecoder2.class;
+    setAllowDump(false);
   }
 
 }

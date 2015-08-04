@@ -29,11 +29,10 @@ import java.nio.ByteBuffer;
  * isn't available in some environment. Please always use native implementations
  * when possible.
  */
-public class RSRawEncoder2 extends AbstractRawErasureEncoder {
+public class RSRawEncoder3 extends AbstractRawErasureEncoder {
   private byte[] encodeMatrix;
-  private byte[] gftbls;
 
-  public RSRawEncoder2(int numDataUnits, int numParityUnits) {
+  public RSRawEncoder3(int numDataUnits, int numParityUnits) {
     super(numDataUnits, numParityUnits);
 
     if (getNumDataUnits() + getNumParityUnits() >= RSUtil.GF.getFieldSize()) {
@@ -41,26 +40,23 @@ public class RSRawEncoder2 extends AbstractRawErasureEncoder {
           "Invalid numDataUnits and numParityUnits");
     }
 
-    int numAllUnits = numDataUnits + numParityUnits;
-    encodeMatrix = new byte[numAllUnits * numDataUnits];
-    ErasureCodeUtil.genCauchyMatrix(encodeMatrix, numAllUnits, numDataUnits);
-    DumpUtil.dumpMatrix(encodeMatrix, numDataUnits, numAllUnits);
-    gftbls = new byte[numAllUnits * numDataUnits * 32];
-    ErasureCodeUtil.initTables(numDataUnits, numParityUnits, encodeMatrix,
-        numDataUnits * numDataUnits, gftbls);
-    //System.out.println(DumpUtil.bytesToHex(gftbls, 9999999));
+    encodeMatrix = new byte[numDataUnits * numParityUnits];
+    ErasureCodeUtil.genCauchyMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
+    DumpUtil.dumpMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
   }
 
   @Override
   protected void doEncode(ByteBuffer[] inputs, ByteBuffer[] outputs) {
-    ErasureCodeUtil.encodeData(numDataUnits, numParityUnits,
-        gftbls, inputs, outputs);
+    //TODO
   }
 
   @Override
   protected void doEncode(byte[][] inputs, int[] inputOffsets,
-                          int dataLen, byte[][] outputs, int[] outputOffsets) {
-    ErasureCodeUtil.encodeData(dataLen, numDataUnits, numParityUnits,
-        gftbls, inputs, outputs);
+                          int dataLen, byte[][] outputs,
+                          int[] outputOffsets) {
+    for (int i = 0; i < numParityUnits; i++) {
+      ErasureCodeUtil.encodeDotprod(numDataUnits, encodeMatrix, i * numDataUnits,
+          inputs, outputs[i]);
+    }
   }
 }

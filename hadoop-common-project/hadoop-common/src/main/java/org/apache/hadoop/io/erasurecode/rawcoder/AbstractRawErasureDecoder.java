@@ -30,9 +30,11 @@ import java.util.Arrays;
  */
 public abstract class AbstractRawErasureDecoder extends AbstractRawErasureCoder
     implements RawErasureDecoder {
+  protected final int numAllUnits;
 
   public AbstractRawErasureDecoder(int numDataUnits, int numParityUnits) {
     super(numDataUnits, numParityUnits);
+    numAllUnits = numDataUnits + numParityUnits;
   }
 
   @Override
@@ -231,5 +233,24 @@ public abstract class AbstractRawErasureDecoder extends AbstractRawErasureCoder
 
     throw new HadoopIllegalArgumentException(
         "Invalid inputs are found, all being null");
+  }
+
+  protected <T> void makeValidIndexes(T[] inputs, int[] validIndexes) {
+    int idx = 0;
+    for (int i = 0; i < inputs.length; i++) {
+      if (inputs[i] != null) {
+        validIndexes[idx++] = i;
+      }
+    }
+  }
+
+  protected boolean[] erasures2erased(int[] erasures) {
+    boolean[] erased = new boolean[numAllUnits];
+
+    for (int i = 0; i < erasures.length; i++) {
+      erased[erasures[i]] = true;
+    }
+
+    return erased;
   }
 }
