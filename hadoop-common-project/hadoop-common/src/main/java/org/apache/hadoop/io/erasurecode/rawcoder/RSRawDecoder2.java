@@ -63,8 +63,7 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
     for (int i = 0; i < numDataUnits; i++) {
       realInputs[i] = inputs[validIndexes[i]];
     }
-    ErasureCodeUtil.encodeData(numDataUnits, erasedIndexes.length,
-        gftbls, realInputs, outputs);
+    ErasureCodeUtil.encodeData(gftbls, realInputs, outputs);
   }
 
   @Override
@@ -79,8 +78,8 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
       realInputs[i] = inputs[validIndexes[i]];
       realInputOffsets[i] = inputOffsets[validIndexes[i]];
     }
-    ErasureCodeUtil.encodeData(numDataUnits, erasedIndexes.length,
-        gftbls, dataLen, realInputs, realInputOffsets, outputs, outputOffsets);
+    ErasureCodeUtil.encodeData(gftbls, dataLen, realInputs, realInputOffsets,
+        outputs, outputOffsets);
   }
 
   private <T> void prepareDecoding(T[] inputs, int[] erasedIndexes) {

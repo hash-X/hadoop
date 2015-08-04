@@ -30,5 +30,4 @@ public class TestRSRawCoder2 extends TestRSRawCoderBase {
     this.decoderClass = RSRawDecoder2.class;
     setAllowDump(false);
   }
-
 }

@@ -91,35 +91,42 @@ public final class ErasureCodeUtil {
     }
   }
 
-  public static void encodeData(int numInputs, int numOutputs, byte[] gftbls,
-                                int dataLen, byte[][] inputs, int[] inputOffsets,
-                                 byte[][] outputs, int[] outputOffsets) {
-    byte s;
-
-    for (int l = 0; l < numOutputs; l++) {
+  public static void encodeData(byte[] gftbls, int dataLen, byte[][] inputs,
+                                int[] inputOffsets, byte[][] outputs,
+                                int[] outputOffsets) {
+    for (int l = 0; l < outputs.length; l++) {
       for (int i = 0; i < dataLen; i++) {
-        s = 0;
-        for (int j = 0; j < numInputs; j++) {
+        byte s = 0;
+        for (int j = 0; j < inputs.length; j++) {
           s ^= GaloisFieldUtil.gfMul(inputs[j][inputOffsets[j] + i],
-              gftbls[j * 32 + l * numInputs * 32 + 1]);
+              gftbls[j * 32 + l * inputs.length * 32 + 1]);
         }
         outputs[l][outputOffsets[l] + i] = s;
       }
     }
   }
 
-  public static void encodeData(int numInputs, int numOutputs, byte[] gftbls,
-                                 ByteBuffer[] inputs, ByteBuffer[] outputs) {
-    byte s;
+  public static void encodeData(byte[] gftbls, ByteBuffer[] inputs,
+                                ByteBuffer[] outputs) {
+    int[] inputOffsets = new int[inputs.length];
+    for (int i = 0; i < inputs.length; i++) {
+      inputOffsets[i] = inputs[i].position();
+    }
+
+    int[] outputOffsets = new int[outputs.length];
+    for (int i = 0; i < outputs.length; i++) {
+      outputOffsets[i] = outputs[i].position();
+    }
+
     int dataLen = inputs[0].remaining();
-    for (int l = 0; l < numOutputs; l++) {
+    for (int l = 0; l < outputs.length; l++) {
       for (int i = 0; i < dataLen; i++) {
-        s = 0;
-        for (int j = 0; j < numInputs; j++) {
-          s ^= GaloisFieldUtil.gfMul(inputs[j].get(i),
-              gftbls[j * 32 + l * numInputs * 32 + 1]);
+        byte s = 0;
+        for (int j = 0; j < inputs.length; j++) {
+          s ^= GaloisFieldUtil.gfMul(inputs[j].get(inputOffsets[j] + i),
+              gftbls[j * 32 + l * inputs.length * 32 + 1]);
         }
-        outputs[l].put(i, s);
+        outputs[l].put(outputOffsets[l] + i, s);
       }
     }
   }

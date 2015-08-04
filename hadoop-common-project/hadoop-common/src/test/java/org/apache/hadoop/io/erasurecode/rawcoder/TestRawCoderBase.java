@@ -48,8 +48,8 @@ public abstract class TestRawCoderBase extends TestCoderBase {
    * coding buffers are shared, which may have bugs.
    */
   protected void testCodingDoMixed() {
-    //testCoding(true);
-    testCoding(false);
+    testCoding(true);
+    //testCoding(false);
   }
 
   /**
