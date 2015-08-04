@@ -42,18 +42,20 @@ public class RSRawEncoder3 extends AbstractRawErasureEncoder {
 
     encodeMatrix = new byte[numDataUnits * numParityUnits];
     ErasureCodeUtil.genCauchyMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
-    DumpUtil.dumpMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
+    //DumpUtil.dumpMatrix_JE(encodeMatrix, numDataUnits, numParityUnits);
   }
 
   @Override
   protected void doEncode(ByteBuffer[] inputs, ByteBuffer[] outputs) {
-    //TODO
+    for (int i = 0; i < numParityUnits; i++) {
+      ErasureCodeUtil.encodeDotprod(numDataUnits, encodeMatrix, i * numDataUnits,
+          inputs, outputs[i]);
+    }
   }
 
   @Override
-  protected void doEncode(byte[][] inputs, int[] inputOffsets,
-                          int dataLen, byte[][] outputs,
-                          int[] outputOffsets) {
+  protected void doEncode(byte[][] inputs, int[] inputOffsets, int dataLen,
+                          byte[][] outputs, int[] outputOffsets) {
     for (int i = 0; i < numParityUnits; i++) {
       ErasureCodeUtil.encodeDotprod(numDataUnits, encodeMatrix, i * numDataUnits,
           inputs, outputs[i]);

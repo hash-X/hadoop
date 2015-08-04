@@ -35,9 +35,9 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
 
   private byte[] decodeMatrix;
   private byte[] invertMatrix;
-  private byte[] b;
+  private byte[] tmpMatrix;
   private byte[] gftbls;
-  private int[] validInputIndexes;
+  private int[] validIndexes;
   private int numErasedDataUnits;
   private boolean[] erasureFlags;
 
@@ -61,7 +61,7 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
 
     ByteBuffer[] realInputs = new ByteBuffer[numDataUnits];
     for (int i = 0; i < numDataUnits; i++) {
-      realInputs[i] = inputs[validInputIndexes[i]];
+      realInputs[i] = inputs[validIndexes[i]];
     }
     ErasureCodeUtil.encodeData(numDataUnits, erasedIndexes.length,
         gftbls, realInputs, outputs);
@@ -74,19 +74,21 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
     prepareDecoding(inputs, erasedIndexes);
 
     byte[][] realInputs = new byte[numDataUnits][];
+    int[] realInputOffsets = new int[numDataUnits];
     for (int i = 0; i < numDataUnits; i++) {
-      realInputs[i] = inputs[validInputIndexes[i]];
+      realInputs[i] = inputs[validIndexes[i]];
+      realInputOffsets[i] = inputOffsets[validIndexes[i]];
     }
     ErasureCodeUtil.encodeData(numDataUnits, erasedIndexes.length,
-        gftbls, realInputs, outputs);
+        gftbls, dataLen, realInputs, realInputOffsets, outputs, outputOffsets);
   }
 
   private <T> void prepareDecoding(T[] inputs, int[] erasedIndexes) {
     decodeMatrix = new byte[numAllUnits * numDataUnits];
-    b = new byte[numAllUnits * numDataUnits];
+    tmpMatrix = new byte[numAllUnits * numDataUnits];
     invertMatrix = new byte[numAllUnits * numDataUnits];
     gftbls = new byte[numAllUnits * getNumDataUnits() * 32];
-    validInputIndexes = new int[numDataUnits];
+    validIndexes = new int[numDataUnits];
     erasureFlags = new boolean[numAllUnits];
     numErasedDataUnits = 0;
 
@@ -94,7 +96,7 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
       while (inputs[r] == null) {
         r++;
       }
-      validInputIndexes[i] = r;
+      validIndexes[i] = r;
     }
 
     processErasures(erasedIndexes);
@@ -123,23 +125,20 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
     int i, j, r, p;
     byte s;
 
-    // Construct matrix b by removing error rows
+    // Construct matrix tmpMatrix by removing error rows
     for (i = 0; i < numDataUnits; i++) {
-      r = validInputIndexes[i];
+      r = validIndexes[i];
       for (j = 0; j < numDataUnits; j++) {
-        b[numDataUnits * i + j] = encodeMatrix[numDataUnits * r + j];
+        tmpMatrix[numDataUnits * i + j] = encodeMatrix[numDataUnits * r + j];
       }
     }
 
-    GaloisFieldUtil.gfInvertMatrix(b, invertMatrix, numDataUnits);
+    GaloisFieldUtil.gfInvertMatrix(tmpMatrix, invertMatrix, numDataUnits);
 
     for (i = 0; i < numErasedDataUnits; i++) {
       for (j = 0; j < numDataUnits; j++) {
-        try {
-          decodeMatrix[numDataUnits * i + j] = invertMatrix[numDataUnits * erasedIndexes[i] + j];
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
+          decodeMatrix[numDataUnits * i + j] =
+              invertMatrix[numDataUnits * erasedIndexes[i] + j];
       }
     }
 

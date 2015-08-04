@@ -60,7 +60,7 @@ public class RSRawEncoder2 extends AbstractRawErasureEncoder {
   @Override
   protected void doEncode(byte[][] inputs, int[] inputOffsets,
                           int dataLen, byte[][] outputs, int[] outputOffsets) {
-    ErasureCodeUtil.encodeData(dataLen, numDataUnits, numParityUnits,
-        gftbls, inputs, outputs);
+    ErasureCodeUtil.encodeData(numDataUnits, numParityUnits,
+        gftbls, dataLen, inputs, inputOffsets, outputs, outputOffsets);
   }
 }

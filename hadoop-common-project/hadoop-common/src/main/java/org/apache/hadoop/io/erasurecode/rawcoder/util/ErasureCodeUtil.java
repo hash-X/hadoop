@@ -92,19 +92,18 @@ public final class ErasureCodeUtil {
   }
 
   public static void encodeData(int numInputs, int numOutputs, byte[] gftbls,
-                                 byte[][] inputs, int[] inputOffsets, int dataLen,
+                                int dataLen, byte[][] inputs, int[] inputOffsets,
                                  byte[][] outputs, int[] outputOffsets) {
-    int i, j, l;
     byte s;
 
-    for (l = 0; l < numOutputs; l++) {
-      for (i = 0; i < dataLen; i++) {
+    for (int l = 0; l < numOutputs; l++) {
+      for (int i = 0; i < dataLen; i++) {
         s = 0;
-        for (j = 0; j < numInputs; j++) {
-          s ^= GaloisFieldUtil.gfMul(inputs[j][i],
+        for (int j = 0; j < numInputs; j++) {
+          s ^= GaloisFieldUtil.gfMul(inputs[j][inputOffsets[j] + i],
               gftbls[j * 32 + l * numInputs * 32 + 1]);
         }
-        outputs[l][i] = s;
+        outputs[l][outputOffsets[l] + i] = s;
       }
     }
   }
