@@ -21,6 +21,7 @@ import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.io.erasurecode.rawcoder.util.RSUtil;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * A raw erasure decoder in RS code scheme in pure Java in case native one
@@ -70,6 +71,21 @@ public class RSRawDecoder extends AbstractRawErasureDecoder {
         numParityUnits);
   }
 
+  @Override
+  public void decode(ByteBuffer[] inputs, int[] erasedIndexes,
+                     ByteBuffer[] outputs) {
+    // Adjust the order to match with underlying requirements.
+    adjustOrder(inputs, erasedIndexes, outputs);
+    super.decode(inputs, erasedIndexes, outputs);
+  }
+
+  @Override
+  public void decode(byte[][] inputs, int[] erasedIndexes, byte[][] outputs) {
+    // Adjust the order to match with underlying requirements.
+    adjustOrder(inputs, erasedIndexes, outputs);
+    super.decode(inputs, erasedIndexes, outputs);
+  }
+
   private void doDecodeImpl(ByteBuffer[] inputs, int[] erasedIndexes,
                           ByteBuffer[] outputs) {
     ByteBuffer valid = findFirstValidInput(inputs);
@@ -93,7 +109,7 @@ public class RSRawDecoder extends AbstractRawErasureDecoder {
     }
 
     RSUtil.GF.solveVandermondeSystem(errSignature, outputs, outputOffsets,
-            erasedIndexes.length, dataLen);
+        erasedIndexes.length, dataLen);
   }
 
   @Override
@@ -196,6 +212,42 @@ public class RSRawDecoder extends AbstractRawErasureDecoder {
 
     doDecodeImpl(inputs, erasedOrNotToReadIndexes,
         adjustedDirectBufferOutputsParameter);
+  }
+
+  /*
+   * Convert data units first order to parity units first order.
+   */
+  private <T> void adjustOrder(T[] inputs, int[] erasedIndexes, T[] outputs) {
+    T[] inputs2 = Arrays.copyOf(inputs, inputs.length);
+    int[] erasedIndexes2 = Arrays.copyOf(erasedIndexes, erasedIndexes.length);
+    T[] outputs2 = Arrays.copyOf(outputs, outputs.length);
+
+    // Example:
+    // d0 d1 d2 d3 d4 d5 : p0 p1 p2 => p0 p1 p2 : d0 d1 d2 d3 d4 d5
+    System.arraycopy(inputs2, numDataUnits, inputs, 0, numParityUnits);
+    System.arraycopy(inputs2, 0, inputs, numParityUnits, numDataUnits);
+
+    int numErasedDataUnits = 0, numErasedParityUnits = 0;
+    int idx = 0;
+    for (int i = 0; i < erasedIndexes2.length; i++) {
+      if (erasedIndexes2[i] >= numDataUnits) {
+        erasedIndexes[idx++] = erasedIndexes2[i] - numDataUnits;
+        numErasedParityUnits++;
+      }
+    }
+    for (int i = 0; i < erasedIndexes2.length; i++) {
+      if (erasedIndexes2[i] < numDataUnits) {
+        erasedIndexes[idx++] = erasedIndexes2[i] + numParityUnits;
+        numErasedDataUnits++;
+      }
+    }
+
+    // Copy for data units
+    System.arraycopy(outputs2, numErasedDataUnits, outputs,
+        0, numErasedParityUnits);
+    // Copy for parity units
+    System.arraycopy(outputs2, 0, outputs,
+        numErasedParityUnits, numErasedDataUnits);
   }
 
   private byte[] checkGetBytesArrayBuffer(int idx, int bufferLen) {
