@@ -19,11 +19,10 @@ package org.apache.hadoop.io.erasurecode;
 
 import org.apache.hadoop.io.erasurecode.rawcoder.*;
 
-import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.Random;
 
-public class BechmarkTool {
+public class BenchmarkTool {
   private static RawErasureCoderFactory[] coderMakers =
       new RawErasureCoderFactory[] {
           new RSRawErasureCoderFactory(),
@@ -63,7 +62,7 @@ public class BechmarkTool {
       usage("Invalid option");
     } else {
       //usage(null);
-      performBench(0);
+      performBench(0, 1);
     }
 
     if (wantList) {
@@ -73,12 +72,19 @@ public class BechmarkTool {
     }
   }
 
-  private static void performBench(int coderIndex) {
+  private static void performBench(int... coderIndexes) {
+    BenchData benchData = new BenchData();
+    for (int coderIndex : coderIndexes) {
+      performBench(benchData, coderIndex);
+    }
+  }
+
+  private static void performBench(BenchData benchData, int coderIndex) {
     System.out.println("Performing benchmark test for "
         + coderNames[coderIndex]);
 
     RawErasureCoderFactory maker = coderMakers[coderIndex];
-    CoderBench bench = new CoderBench(maker);
+    CoderBench bench = new CoderBench(benchData, maker);
     bench.performEncode();
     bench.performDecode();
   }
@@ -91,35 +97,26 @@ public class BechmarkTool {
     System.out.println(sb.toString());
   }
 
-  static class CoderBench {
+  static class BenchData {
     Random rand = new Random();
     final int numDataUnits = 6;
     final int numParityUnits = 3;
     final int numAllUnits = numDataUnits + numParityUnits;
-    final int chunkSize = 64 * 1024 * 1024; // 128MB
-    final ByteBuffer[] inputs = new ByteBuffer[numDataUnits];
-    final ByteBuffer[] outputs = new ByteBuffer[numParityUnits];
-    final ByteBuffer[] decodeInputs = new ByteBuffer[numAllUnits];
-    final int[] erasedIndexes = new int[] {0, 5, 8};
-    final ByteBuffer[] decodeOutputs = new ByteBuffer[erasedIndexes.length];
+    final int chunkSize = 16 * 1024 * 1024; // MB
+    final byte[][] inputs = new byte[numDataUnits][];
+    final byte[][] outputs = new byte[numParityUnits][];
+    final byte[][] decodeInputs = new byte[numAllUnits][];
+    final int[] erasedIndexes = new int[]{0, 5, 8};
+    final byte[][] decodeOutputs = new byte[erasedIndexes.length][];
 
-    final RawErasureEncoder encoder;
-    final RawErasureDecoder decoder;
-
-    CoderBench(RawErasureCoderFactory maker) {
-      encoder = maker.createEncoder(numDataUnits, numParityUnits);
-      decoder = maker.createDecoder(numDataUnits, numParityUnits);
-
-      byte[] tmpBuf = new byte[chunkSize];
+    BenchData() {
       for (int i = 0; i < inputs.length; i++) {
-        rand.nextBytes(tmpBuf);
-        inputs[i] = ByteBuffer.allocateDirect(chunkSize);
-        inputs[i].put(tmpBuf);
-        inputs[i].flip();
+        inputs[i] = new byte[chunkSize];
+        rand.nextBytes(inputs[i]);
       }
 
       for (int i = 0; i < outputs.length; i++) {
-        outputs[i] = ByteBuffer.allocateDirect(chunkSize);
+        outputs[i] = new byte[chunkSize];
       }
 
       System.arraycopy(inputs, 0, decodeInputs, 0, numDataUnits);
@@ -129,20 +126,35 @@ public class BechmarkTool {
       }
 
       for (int i = 0; i < decodeOutputs.length; i++) {
-        decodeOutputs[i] = ByteBuffer.allocateDirect(chunkSize);
+        decodeOutputs[i] = new byte[chunkSize];
       }
+    }
+  }
+
+  static class CoderBench {
+    final RawErasureEncoder encoder;
+    final RawErasureDecoder decoder;
+    final BenchData benchData;
+
+    CoderBench(BenchData benchData, RawErasureCoderFactory maker) {
+      this.benchData = benchData;
+      encoder = maker.createEncoder(benchData.numDataUnits,
+          benchData.numParityUnits);
+      decoder = maker.createDecoder(benchData.numDataUnits,
+          benchData.numParityUnits);
     }
 
     void encodeOnce() {
-      encoder.encode(inputs, outputs);
+      encoder.encode(benchData.inputs, benchData.outputs);
     }
 
     void decodeOnce() {
-      decoder.decode(decodeInputs, erasedIndexes, decodeOutputs);
+      decoder.decode(benchData.decodeInputs, benchData.erasedIndexes,
+          benchData.decodeOutputs);
     }
 
     private void warmup(boolean isEncode) {
-      int times = 0;
+      int times = 3;
       for (int i = 0; i < times; i++) {
         if (isEncode) {
           encodeOnce();
@@ -163,7 +175,7 @@ public class BechmarkTool {
     private void performCoding(boolean isEncode) {
       warmup(isEncode);
 
-      int times = 1;
+      int times = 5;
       long begin = System.currentTimeMillis();
       for (int i = 0; i < times; i++) {
         if (isEncode) {
@@ -174,14 +186,16 @@ public class BechmarkTool {
       }
       long end = System.currentTimeMillis();
 
-      double usedTime = ((float)(end - begin)) / 1000.00f;
-      long usedData = (numDataUnits * chunkSize) / (1024 * 1024);
+      double usedTime = ((float)(end - begin) / times) / 1000.00f;
+      long usedData = (times * benchData.numDataUnits *
+          benchData.chunkSize) / (1024 * 1024);
       double throughput = usedData / usedTime;
 
       DecimalFormat df = new DecimalFormat("#.##");
       String text = isEncode ? "Encode " : "Decode ";
       text += usedData + "MB data takes " + df.format(usedTime)
           + " seconds, throughput:" + df.format(throughput) + "MB/s";
+
       System.out.println(text);
     }
   }

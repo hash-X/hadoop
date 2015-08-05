@@ -51,7 +51,7 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
     int numAllUnits = numDataUnits + numParityUnits;
     encodeMatrix = new byte[numAllUnits * numDataUnits];
     ErasureCodeUtil.genCauchyMatrix(encodeMatrix, numAllUnits, numDataUnits);
-    DumpUtil.dumpMatrix(encodeMatrix, numDataUnits, numAllUnits);
+    //DumpUtil.dumpMatrix(encodeMatrix, numDataUnits, numAllUnits);
   }
 
   @Override
