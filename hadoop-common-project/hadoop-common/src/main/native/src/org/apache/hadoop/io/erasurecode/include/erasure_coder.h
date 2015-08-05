@@ -56,7 +56,7 @@ typedef struct _DecoderState {
   // Below are per decode call
   unsigned char gftbls[MMAX * KMAX * 32];
   unsigned int decodeIndex[MMAX];
-  unsigned char b[MMAX * KMAX];
+  unsigned char tmpMatrix[MMAX * KMAX];
   unsigned char invertMatrix[MMAX * KMAX];
   unsigned char decodeMatrix[MMAX * KMAX];
   unsigned char erasureFlags[MMAX];

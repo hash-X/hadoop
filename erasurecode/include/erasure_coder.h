@@ -50,14 +50,13 @@ typedef struct _EncoderState {
 
 typedef struct _DecoderState {
   CoderState coderState;
-  int cache;
-  int cached;
+
   unsigned char encodeMatrix[MMAX * KMAX];
 
   // Below are per decode call
   unsigned char gftbls[MMAX * KMAX * 32];
   unsigned int decodeIndex[MMAX];
-  unsigned char b[MMAX * KMAX];
+  unsigned char tmpMatrix[MMAX * KMAX];
   unsigned char invertMatrix[MMAX * KMAX];
   unsigned char decodeMatrix[MMAX * KMAX];
   unsigned char erasureFlags[MMAX];
@@ -70,8 +69,6 @@ typedef struct _DecoderState {
 void initCoder(CoderState* pCoderState, int numDataUnits, int numParityUnits);
 
 void allowVerbose(CoderState* pCoderState, int flag);
-
-void allowCache(DecoderState* pCoderState, int flag);
 
 void initEncoder(EncoderState* encoder, int numDataUnits, int numParityUnits);
 

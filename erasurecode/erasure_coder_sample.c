@@ -40,7 +40,7 @@ static void usage(char* errorMsg) {
 
 int main(int argc, char *argv[]) {
   int i, j;
-  int chunkSize = 64 * 1024;
+  int chunkSize = 1024;
   int numDataUnits;
   int numParityUnits;
   char errMsg[256];
@@ -52,7 +52,6 @@ int main(int argc, char *argv[]) {
   DecoderState* pDecoder;
   unsigned char* decodingOutput[2];
   unsigned char** backupUnits;
-  int cache = 0;
 
   load_erasurecode_lib(errMsg, sizeof(errMsg));
   if (strlen(errMsg) > 0) {
@@ -62,14 +61,13 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  if (argc < 3) usage(NULL);
+  if (argc != 3) usage(NULL);
   if (sscanf(argv[1], "%d", &numDataUnits) == 0 || numDataUnits <= 0) {
     usage("Invalid numDataUnits");
   }
   if (sscanf(argv[2], "%d", &numParityUnits) == 0 || numParityUnits <= 0) {
     usage("Invalid numParityUnits");
   }
-  if (argv[3] != NULL) cache = 1;
 
   dataUnits = (unsigned char**)malloc(sizeof(unsigned char*) * numDataUnits);
   parityUnits = (unsigned char**)malloc(sizeof(unsigned char*) * numParityUnits);
@@ -105,8 +103,8 @@ int main(int argc, char *argv[]) {
   memcpy(allUnits + numDataUnits, parityUnits,
                             numParityUnits * (sizeof (unsigned char*)));
 
-  erasedIndexes[0] = 0;
-  //erasedIndexes[1] = 7;
+  erasedIndexes[0] = 1;
+  erasedIndexes[1] = 7;
 
   backupUnits[0] = allUnits[0];
   backupUnits[1] = allUnits[1];
@@ -114,14 +112,13 @@ int main(int argc, char *argv[]) {
 
   allUnits[0] = NULL; // Not to read
   allUnits[1] = NULL;
-  allUnits[2] = NULL;
+  allUnits[7] = NULL;
 
   decodingOutput[0] = malloc(chunkSize);
   decodingOutput[1] = malloc(chunkSize);
 
-  pDecoder->cache = cache;
-  for (i = 0; i < 1; i++) {
-    decode(pDecoder, allUnits, erasedIndexes, 1, decodingOutput, chunkSize);
+  for (i = 0; i < 100; i++) {
+    decode(pDecoder, allUnits, erasedIndexes, 2, decodingOutput, chunkSize);
   }
 
   for (i = 0; i < pDecoder->numErased; i++) {

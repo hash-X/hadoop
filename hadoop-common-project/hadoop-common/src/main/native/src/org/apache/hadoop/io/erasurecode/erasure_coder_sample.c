@@ -117,7 +117,9 @@ int main(int argc, char *argv[]) {
   decodingOutput[0] = malloc(chunkSize);
   decodingOutput[1] = malloc(chunkSize);
 
-  decode(pDecoder, allUnits, erasedIndexes, 2, decodingOutput, chunkSize);
+  for (i = 0; i < 100; i++) {
+    decode(pDecoder, allUnits, erasedIndexes, 2, decodingOutput, chunkSize);
+  }
 
   for (i = 0; i < pDecoder->numErased; i++) {
     if (0 != memcmp(decodingOutput[i], backupUnits[i], chunkSize)) {
