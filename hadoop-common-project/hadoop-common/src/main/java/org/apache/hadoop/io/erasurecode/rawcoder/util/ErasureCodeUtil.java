@@ -91,17 +91,49 @@ public final class ErasureCodeUtil {
     }
   }
 
+  public static void encodeDataOld(byte[] gftbls, int dataLen, byte[][] inputs,
+                                int[] inputOffsets, byte[][] outputs,
+                                int[] outputOffsets) {
+    int numInputs = inputs.length;
+    int numOutputs = outputs.length;
+    int l, i, j, oPos;
+    byte s;
+    for (l = 0; l < numOutputs; l++) {
+      for (i = 0; i < dataLen; i++) {
+        oPos = outputOffsets[l] + i;
+        s = 0;
+        for (j = 0; j < numInputs; j++) {
+          s ^= GaloisFieldUtil.gfMul(inputs[j][inputOffsets[j] + i],
+              gftbls[j * 32 + l * numInputs * 32 + 1]);
+        }
+        outputs[l][oPos] = s;
+      }
+    }
+  }
+
   public static void encodeData(byte[] gftbls, int dataLen, byte[][] inputs,
                                 int[] inputOffsets, byte[][] outputs,
                                 int[] outputOffsets) {
-    for (int l = 0; l < outputs.length; l++) {
-      for (int i = 0; i < dataLen; i++) {
-        byte s = 0;
-        for (int j = 0; j < inputs.length; j++) {
-          s ^= GaloisFieldUtil.gfMul(inputs[j][inputOffsets[j] + i],
-              gftbls[j * 32 + l * inputs.length * 32 + 1]);
+    int numInputs = inputs.length;
+    int numOutputs = outputs.length;
+    int l, i, j, iPos, oPos;
+    byte[] input, output;
+    byte s;
+    for (l = 0; l < numOutputs; l++) {
+      output = outputs[l];
+
+      for (j = 0; j < numInputs; j++) {
+        input = inputs[j];
+        iPos = inputOffsets[j];
+        oPos = outputOffsets[l];
+
+        s = gftbls[j * 32 + l * numInputs * 32 + 1];
+        for (i = 0; i < dataLen / 4; i += 4, iPos += 4, oPos += 4) {
+          output[oPos + 0] ^= GaloisFieldUtil.gfMul(input[iPos + 0], s);
+          output[oPos + 1] ^= GaloisFieldUtil.gfMul(input[iPos + 1], s);
+          output[oPos + 2] ^= GaloisFieldUtil.gfMul(input[iPos + 2], s);
+          output[oPos + 3] ^= GaloisFieldUtil.gfMul(input[iPos + 3], s);
         }
-        outputs[l][outputOffsets[l] + i] = s;
       }
     }
   }
