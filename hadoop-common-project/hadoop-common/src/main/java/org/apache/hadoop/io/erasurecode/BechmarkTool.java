@@ -20,6 +20,7 @@ package org.apache.hadoop.io.erasurecode;
 import org.apache.hadoop.io.erasurecode.rawcoder.*;
 
 import java.nio.ByteBuffer;
+import java.text.DecimalFormat;
 import java.util.Random;
 
 public class BechmarkTool {
@@ -31,9 +32,9 @@ public class BechmarkTool {
       };
 
   private static String[] coderNames = new String[] {
-      "Reed-Solomon in Java (originated from HDFS-RAID)",
-      "Reed-Solomon in Java (interoperable with ISA-L)",
-      "Reed-Solomon in native backed by ISA-L",
+      "Reed-Solomon coder in Java (originated from HDFS-RAID)",
+      "Reed-Solomon coder in Java (interoperable with ISA-L)",
+      "Reed-Solomon coder in native backed by ISA-L",
   };
 
   private static void usage(String message) {
@@ -73,7 +74,7 @@ public class BechmarkTool {
   }
 
   private static void performBench(int coderIndex) {
-    System.out.println("Will perform benchmark test for "
+    System.out.println("Performing benchmark test for "
         + coderNames[coderIndex]);
 
     RawErasureCoderFactory maker = coderMakers[coderIndex];
@@ -95,7 +96,7 @@ public class BechmarkTool {
     final int numDataUnits = 6;
     final int numParityUnits = 3;
     final int numAllUnits = numDataUnits + numParityUnits;
-    final int chunkSize = 256 * 1024 * 1024; // 256MB
+    final int chunkSize = 64 * 1024 * 1024; // 128MB
     final ByteBuffer[] inputs = new ByteBuffer[numDataUnits];
     final ByteBuffer[] outputs = new ByteBuffer[numParityUnits];
     final ByteBuffer[] decodeInputs = new ByteBuffer[numAllUnits];
@@ -141,7 +142,8 @@ public class BechmarkTool {
     }
 
     private void warmup(boolean isEncode) {
-      for (int i = 0; i < 3; i++) {
+      int times = 0;
+      for (int i = 0; i < times; i++) {
         if (isEncode) {
           encodeOnce();
         } else {
@@ -161,7 +163,7 @@ public class BechmarkTool {
     private void performCoding(boolean isEncode) {
       warmup(isEncode);
 
-      int times = 10;
+      int times = 1;
       long begin = System.currentTimeMillis();
       for (int i = 0; i < times; i++) {
         if (isEncode) {
@@ -172,12 +174,14 @@ public class BechmarkTool {
       }
       long end = System.currentTimeMillis();
 
-      float usedTime = ((float)(end - begin)) / 1000.00f;
+      double usedTime = ((float)(end - begin)) / 1000.00f;
       long usedData = (numDataUnits * chunkSize) / (1024 * 1024);
-      float throughput = usedData / usedTime;
+      double throughput = usedData / usedTime;
+
+      DecimalFormat df = new DecimalFormat("#.##");
       String text = isEncode ? "Encode " : "Decode ";
-      text += usedData + "MB data takes " + usedTime
-          + " seconds, throughput:" + throughput + "MB/s";
+      text += usedData + "MB data takes " + df.format(usedTime)
+          + " seconds, throughput:" + df.format(throughput) + "MB/s";
       System.out.println(text);
     }
   }
