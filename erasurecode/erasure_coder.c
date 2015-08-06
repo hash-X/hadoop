@@ -77,17 +77,49 @@ int encode(EncoderState* pCoderState, unsigned char** dataUnits,
   return 0;
 }
 
+// Return 1 when diff, 0 otherwise
+static int compare(int* arr1, int len1, int* arr2, int len2) {
+  int i;
+
+  if (len1 == len2) {
+    for (i = 0; i < len1; i++) {
+      if (arr1[i] != arr2[i]) {
+        return 1;
+      }
+    }
+    return 0;
+  }
+
+  return 1;
+}
+
 static int processErasures(DecoderState* pCoderState, unsigned char** inputs,
                                     int* erasedIndexes, int numErased) {
   int i, r, ret, index;
   int numDataUnits = ((CoderState*)pCoderState)->numDataUnits;
+  int isChanged = 0;
 
   for (i = 0, r = 0; i < numDataUnits; i++, r++) {
     while (inputs[r] == NULL) {
       r++;
     }
-    pCoderState->decodeIndex[i] = r;
+
+    if (pCoderState->decodeIndex[i] != r) {
+      pCoderState->decodeIndex[i] = r;
+      isChanged = 1;
+    }
   }
+
+  if (isChanged == 0 &&
+          compare(pCoderState->erasedIndexes, pCoderState->numErased,
+                           erasedIndexes, numErased) == 0) {
+    for (i = 0; i < numDataUnits; i++) {
+      pCoderState->realInputs[i] = inputs[pCoderState->decodeIndex[i]];
+    }
+    return 0; // Optimization, nothing to do
+  }
+
+  clearDecoder(pCoderState);
 
   for (i = 0; i < numErased; i++) {
     index = erasedIndexes[i];
@@ -106,10 +138,6 @@ static int processErasures(DecoderState* pCoderState, unsigned char** inputs,
     return -1;
   }
 
-  for (i = 0; i < numDataUnits; i++) {
-    pCoderState->realInputs[i] = inputs[pCoderState->decodeIndex[i]];
-  }
-
   h_ec_init_tables(numDataUnits, pCoderState->numErased,
                       pCoderState->decodeMatrix, pCoderState->gftbls);
 
@@ -120,32 +148,12 @@ static int processErasures(DecoderState* pCoderState, unsigned char** inputs,
   return 0;
 }
 
-// Return 1 when changed, 0 otherwise
-static int isErasureChanged(DecoderState* pCoderState,
-                               int* erasedIndexes, int numErased) {
-  int i;
-
-  if (pCoderState->numErased == numErased) {
-    for (i = 0; i < numErased; i++) {
-      if (pCoderState->erasedIndexes[i] != erasedIndexes[i]) {
-        return 1;
-      }
-    }
-    return 0;
-  }
-
-  return 1;
-}
-
 int decode(DecoderState* pCoderState, unsigned char** inputs,
                   int* erasedIndexes, int numErased,
                    unsigned char** outputs, int chunkSize) {
   int numDataUnits = ((CoderState*)pCoderState)->numDataUnits;
 
-  if (isErasureChanged(pCoderState, erasedIndexes, numErased) > 0) {
-    clearDecoder(pCoderState);
-    processErasures(pCoderState, inputs, erasedIndexes, numErased);
-  }
+  processErasures(pCoderState, inputs, erasedIndexes, numErased);
 
   h_ec_encode_data(chunkSize, numDataUnits, pCoderState->numErased,
       pCoderState->gftbls, pCoderState->realInputs, outputs);
@@ -157,13 +165,10 @@ int decode(DecoderState* pCoderState, unsigned char** inputs,
 void clearDecoder(DecoderState* decoder) {
   memset(decoder->gftbls, 0, sizeof(decoder->gftbls));
   memset(decoder->decodeMatrix, 0, sizeof(decoder->decodeMatrix));
-  memset(decoder->decodeIndex, 0, sizeof(decoder->decodeIndex));
   memset(decoder->tmpMatrix, 0, sizeof(decoder->tmpMatrix));
   memset(decoder->invertMatrix, 0, sizeof(decoder->invertMatrix));
   memset(decoder->erasureFlags, 0, sizeof(decoder->erasureFlags));
   memset(decoder->erasedIndexes, 0, sizeof(decoder->erasedIndexes));
-  decoder->numErased = 0;
-  decoder->numErasedDataUnits = 0;
 }
 
 // Generate decode matrix from encode matrix
@@ -183,7 +188,8 @@ int generateDecodeMatrix(DecoderState* pCoderState) {
     }
   }
 
-  h_gf_invert_matrix(pCoderState->tmpMatrix, pCoderState->invertMatrix, numDataUnits);
+  h_gf_invert_matrix(pCoderState->tmpMatrix,
+                                pCoderState->invertMatrix, numDataUnits);
 
   for (i = 0; i < pCoderState->numErasedDataUnits; i++) {
     for (j = 0; j < numDataUnits; j++) {
@@ -196,10 +202,11 @@ int generateDecodeMatrix(DecoderState* pCoderState) {
   for (p = pCoderState->numErasedDataUnits; p < pCoderState->numErased; p++) {
     for (i = 0; i < numDataUnits; i++) {
       s = 0;
-      for (j = 0; j < numDataUnits; j++)
+      for (j = 0; j < numDataUnits; j++) {
         s ^= h_gf_mul(pCoderState->invertMatrix[j * numDataUnits + i],
           pCoderState->encodeMatrix[numDataUnits *
                                         pCoderState->erasedIndexes[p] + j]);
+      }
 
       pCoderState->decodeMatrix[numDataUnits * p + i] = s;
     }
