@@ -110,12 +110,13 @@ static int processErasures(DecoderState* pCoderState, unsigned char** inputs,
     }
   }
 
+  for (i = 0; i < numDataUnits; i++) {
+    pCoderState->realInputs[i] = inputs[pCoderState->decodeIndex[i]];
+  }
+
   if (isChanged == 0 &&
           compare(pCoderState->erasedIndexes, pCoderState->numErased,
                            erasedIndexes, numErased) == 0) {
-    for (i = 0; i < numDataUnits; i++) {
-      pCoderState->realInputs[i] = inputs[pCoderState->decodeIndex[i]];
-    }
     return 0; // Optimization, nothing to do
   }
 
