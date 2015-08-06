@@ -128,12 +128,17 @@ public final class ErasureCodeUtil {
         oPos = outputOffsets[l];
 
         s = gftbls[j * 32 + l * numInputs * 32 + 1];
-        for (i = 0; i < dataLen / 4; i += 4, iPos += 4, oPos += 4) {
+
+        for (i = 0; i < dataLen / 4; i++, iPos += 4, oPos += 4) {
           output[oPos + 0] ^= GaloisFieldUtil.gfMul(input[iPos + 0], s);
           output[oPos + 1] ^= GaloisFieldUtil.gfMul(input[iPos + 1], s);
           output[oPos + 2] ^= GaloisFieldUtil.gfMul(input[iPos + 2], s);
           output[oPos + 3] ^= GaloisFieldUtil.gfMul(input[iPos + 3], s);
         }
+        /*
+        for (i = 0; i < dataLen; i++) {
+          output[oPos++] ^= GaloisFieldUtil.gfMul(input[iPos++], s);
+        }*/
       }
     }
   }

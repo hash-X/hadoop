@@ -69,6 +69,5 @@ public abstract class AbstractNativeRawEncoder
   }
 
   private long __native_coder;
-  // To be utilized by HADOOP-12011
-  private long __native_verbose = 1;
+  private long __native_verbose = 0;
 }

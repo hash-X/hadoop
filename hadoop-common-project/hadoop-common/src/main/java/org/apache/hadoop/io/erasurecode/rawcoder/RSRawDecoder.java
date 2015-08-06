@@ -74,16 +74,28 @@ public class RSRawDecoder extends AbstractRawErasureDecoder {
   @Override
   public void decode(ByteBuffer[] inputs, int[] erasedIndexes,
                      ByteBuffer[] outputs) {
+    // Make copies avoiding affecting original ones;
+    ByteBuffer[] inputs2 = new ByteBuffer[inputs.length];
+    int[] erasedIndexes2 = new int[erasedIndexes.length];
+    ByteBuffer[] outputs2 = new ByteBuffer[outputs.length];
+
     // Adjust the order to match with underlying requirements.
-    adjustOrder(inputs, erasedIndexes, outputs);
+    adjustOrder(inputs, inputs2,
+        erasedIndexes, erasedIndexes2, outputs, outputs2);
     super.decode(inputs, erasedIndexes, outputs);
   }
 
   @Override
   public void decode(byte[][] inputs, int[] erasedIndexes, byte[][] outputs) {
+    // Make copies avoiding affecting original ones;
+    byte[][] inputs2 = new byte[inputs.length][];
+    int[] erasedIndexes2 = new int[erasedIndexes.length];
+    byte[][] outputs2 = new byte[outputs.length][];
+
     // Adjust the order to match with underlying requirements.
-    adjustOrder(inputs, erasedIndexes, outputs);
-    super.decode(inputs, erasedIndexes, outputs);
+    adjustOrder(inputs, inputs2,
+        erasedIndexes, erasedIndexes2, outputs, outputs2);
+    super.decode(inputs2, erasedIndexes2, outputs2);
   }
 
   private void doDecodeImpl(ByteBuffer[] inputs, int[] erasedIndexes,
@@ -217,36 +229,34 @@ public class RSRawDecoder extends AbstractRawErasureDecoder {
   /*
    * Convert data units first order to parity units first order.
    */
-  private <T> void adjustOrder(T[] inputs, int[] erasedIndexes, T[] outputs) {
-    T[] inputs2 = Arrays.copyOf(inputs, inputs.length);
-    int[] erasedIndexes2 = Arrays.copyOf(erasedIndexes, erasedIndexes.length);
-    T[] outputs2 = Arrays.copyOf(outputs, outputs.length);
-
+  private <T> void adjustOrder(T[] inputs, T[] inputs2,
+                               int[] erasedIndexes, int[] erasedIndexes2,
+                               T[] outputs, T[] outputs2) {
     // Example:
     // d0 d1 d2 d3 d4 d5 : p0 p1 p2 => p0 p1 p2 : d0 d1 d2 d3 d4 d5
-    System.arraycopy(inputs2, numDataUnits, inputs, 0, numParityUnits);
-    System.arraycopy(inputs2, 0, inputs, numParityUnits, numDataUnits);
+    System.arraycopy(inputs, numDataUnits, inputs2, 0, numParityUnits);
+    System.arraycopy(inputs, 0, inputs2, numParityUnits, numDataUnits);
 
     int numErasedDataUnits = 0, numErasedParityUnits = 0;
     int idx = 0;
-    for (int i = 0; i < erasedIndexes2.length; i++) {
-      if (erasedIndexes2[i] >= numDataUnits) {
-        erasedIndexes[idx++] = erasedIndexes2[i] - numDataUnits;
+    for (int i = 0; i < erasedIndexes.length; i++) {
+      if (erasedIndexes[i] >= numDataUnits) {
+        erasedIndexes2[idx++] = erasedIndexes[i] - numDataUnits;
         numErasedParityUnits++;
       }
     }
-    for (int i = 0; i < erasedIndexes2.length; i++) {
-      if (erasedIndexes2[i] < numDataUnits) {
-        erasedIndexes[idx++] = erasedIndexes2[i] + numParityUnits;
+    for (int i = 0; i < erasedIndexes.length; i++) {
+      if (erasedIndexes[i] < numDataUnits) {
+        erasedIndexes2[idx++] = erasedIndexes[i] + numParityUnits;
         numErasedDataUnits++;
       }
     }
 
     // Copy for data units
-    System.arraycopy(outputs2, numErasedDataUnits, outputs,
+    System.arraycopy(outputs, numErasedDataUnits, outputs2,
         0, numErasedParityUnits);
     // Copy for parity units
-    System.arraycopy(outputs2, 0, outputs,
+    System.arraycopy(outputs, 0, outputs2,
         numErasedParityUnits, numErasedDataUnits);
   }
 

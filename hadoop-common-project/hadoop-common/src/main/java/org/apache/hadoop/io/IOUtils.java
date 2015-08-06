@@ -37,6 +37,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.util.ChunkedArrayList;
 
 /**
@@ -82,16 +83,18 @@ public class IOUtils {
     byte buf[] = new byte[buffSize];
     new Random().nextBytes(buf);
 
-    int i = 0;
+    long written = 0;
     try {
-      for (; i < times; i++) {
+      for (int i = 0; i < times; i++) {
         out.write(buf);
+        written += buf.length;
       }
     } finally {
       closeStream(out);
     }
 
-    if (i == times) {
+    System.out.println("Using " + conf.get(CommonConfigurationKeys.IO_ERASURECODE_CODEC_RS_RAWCODER_KEY));
+    if (written == times * buffSize) {
       System.out.println("Generating and writing 12GB data to HDFS (no local disk)");
     } else {
       System.out.println("Failed generating and writing 12GB data to HDFS (no local disk)");
@@ -104,16 +107,17 @@ public class IOUtils {
     int times = 96;
     int buffSize = 128 * 1024 * 1024; // 128MB
     byte buf[] = new byte[buffSize];
-    int i = 0;
+    long read = 0;
     try {
-      for (; i < times; i++) {
-        in.read(buf);
+      for (int i = 0; i < times; i++) {
+        read += in.read(buf);
       }
     } finally {
       closeStream(in);
     }
 
-    if (i == times) {
+    System.out.println("Using " + conf.get(CommonConfigurationKeys.IO_ERASURECODE_CODEC_RS_RAWCODER_KEY));
+    if (read == times * buffSize) {
       System.out.println("Reading from HDFS and throwing away 12GB data (no local disk)");
     } else {
       System.out.println("Failed reading from HDFS and throwing away 12GB data (no local disk)");

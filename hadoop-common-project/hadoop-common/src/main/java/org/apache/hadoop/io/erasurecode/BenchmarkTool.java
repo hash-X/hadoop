@@ -19,6 +19,7 @@ package org.apache.hadoop.io.erasurecode;
 
 import org.apache.hadoop.io.erasurecode.rawcoder.*;
 
+import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
 import java.util.Random;
 
@@ -72,21 +73,16 @@ public class BenchmarkTool {
     }
   }
 
-  private static void performBench(int... coderIndexes) {
-    BenchData benchData = new BenchData();
+  public static void performBench(int... coderIndexes) {
     for (int coderIndex : coderIndexes) {
-      performBench(benchData, coderIndex);
+      System.out.println("Performing benchmark test for "
+          + coderNames[coderIndex]);
+
+      RawErasureCoderFactory maker = coderMakers[coderIndex];
+      CoderBench bench = new CoderBench(maker, coderIndex == 2 ? 1000 : 50);
+      bench.performEncode();
+      bench.performDecode();
     }
-  }
-
-  private static void performBench(BenchData benchData, int coderIndex) {
-    System.out.println("Performing benchmark test for "
-        + coderNames[coderIndex]);
-
-    RawErasureCoderFactory maker = coderMakers[coderIndex];
-    CoderBench bench = new CoderBench(benchData, maker);
-    bench.performEncode();
-    bench.performDecode();
   }
 
   private static void printCoders() {
@@ -98,9 +94,11 @@ public class BenchmarkTool {
   }
 
   static class BenchData {
-    Random rand = new Random();
-    final int numDataUnits = 6;
-    final int numParityUnits = 3;
+    final static Random rand = new Random();
+    final static int numDataUnits = 6;
+    final static int numParityUnits = 3;
+
+    final boolean useDirectBuffer;
     final int numAllUnits = numDataUnits + numParityUnits;
     final int chunkSize = 16 * 1024 * 1024; // MB
     final byte[][] inputs = new byte[numDataUnits][];
@@ -109,7 +107,21 @@ public class BenchmarkTool {
     final int[] erasedIndexes = new int[]{0, 5, 8};
     final byte[][] decodeOutputs = new byte[erasedIndexes.length][];
 
-    BenchData() {
+    final ByteBuffer[] inputs2 = new ByteBuffer[numDataUnits];
+    final ByteBuffer[] outputs2 = new ByteBuffer[numParityUnits];
+    final ByteBuffer[] decodeInputs2 = new ByteBuffer[numAllUnits];
+    final ByteBuffer[] decodeOutputs2 = new ByteBuffer[erasedIndexes.length];
+
+    BenchData(boolean useDirectBuffer) {
+      this.useDirectBuffer = useDirectBuffer;
+      if (useDirectBuffer) {
+        initWithDirectByteBuffer();
+      } else {
+        initWithBytesArrayBuffer();
+      }
+    }
+
+    private void initWithBytesArrayBuffer() {
       for (int i = 0; i < inputs.length; i++) {
         inputs[i] = new byte[chunkSize];
         rand.nextBytes(inputs[i]);
@@ -129,37 +141,84 @@ public class BenchmarkTool {
         decodeOutputs[i] = new byte[chunkSize];
       }
     }
+
+    private void initWithDirectByteBuffer() {
+      byte[] tmpBuf = new byte[chunkSize];
+      ByteBuffer tmp;
+      for (int i = 0; i < inputs2.length; i++) {
+        rand.nextBytes(tmpBuf);
+        tmp = ByteBuffer.allocateDirect(chunkSize);
+        tmp.put(tmpBuf);
+        tmp.flip();
+        inputs2[i] = tmp;
+      }
+
+      for (int i = 0; i < outputs.length; i++) {
+        outputs2[i] = ByteBuffer.allocateDirect(chunkSize);;
+      }
+
+      System.arraycopy(inputs2, 0, decodeInputs2, 0, numDataUnits);
+      System.arraycopy(outputs2, 0, decodeInputs2, numDataUnits, numParityUnits);
+      for (int i = 0; i < erasedIndexes.length; i++) {
+        decodeInputs2[erasedIndexes[i]] = null;
+      }
+
+      for (int i = 0; i < decodeOutputs2.length; i++) {
+        decodeOutputs2[i] = ByteBuffer.allocateDirect(chunkSize);
+      }
+    }
+
+    void encodeOnce(RawErasureEncoder encoder) {
+      if (useDirectBuffer) {
+        encoder.encode(inputs2, outputs2);
+      } else {
+        encoder.encode(inputs, outputs);
+      }
+    }
+
+    void decodeOnce(RawErasureDecoder decoder) {
+      if (useDirectBuffer) {
+        decoder.decode(decodeInputs2, erasedIndexes, decodeOutputs2);
+      } else {
+        decoder.decode(decodeInputs, erasedIndexes, decodeOutputs);
+      }
+    }
   }
 
   static class CoderBench {
+    static BenchData bytesArrayBufferBenchData;
+    static BenchData directByteBufferBenchData;
     final RawErasureEncoder encoder;
     final RawErasureDecoder decoder;
-    final BenchData benchData;
+    final int testTimes;
+    BenchData benchData;
 
-    CoderBench(BenchData benchData, RawErasureCoderFactory maker) {
-      this.benchData = benchData;
-      encoder = maker.createEncoder(benchData.numDataUnits,
-          benchData.numParityUnits);
+
+    CoderBench(RawErasureCoderFactory maker, int testTimes) {
+      this.testTimes = testTimes;
+      encoder = maker.createEncoder(benchData.numDataUnits, benchData.numParityUnits);
       decoder = maker.createDecoder(benchData.numDataUnits,
           benchData.numParityUnits);
+      if (encoder.preferDirectBuffer()) {
+        if (directByteBufferBenchData == null) {
+          directByteBufferBenchData = new BenchData(true);
+        }
+        benchData = directByteBufferBenchData;
+      } else {
+        if (bytesArrayBufferBenchData == null) {
+          bytesArrayBufferBenchData = new BenchData(false);
+        }
+        benchData = bytesArrayBufferBenchData;
+      }
     }
 
-    void encodeOnce() {
-      encoder.encode(benchData.inputs, benchData.outputs);
-    }
-
-    void decodeOnce() {
-      decoder.decode(benchData.decodeInputs, benchData.erasedIndexes,
-          benchData.decodeOutputs);
-    }
-
-    private void warmup(boolean isEncode) {
+    private void warmUp(boolean isEncode) {
       int times = 3;
       for (int i = 0; i < times; i++) {
         if (isEncode) {
-          encodeOnce();
+          benchData.encodeOnce(encoder);
         } else {
-          decodeOnce();
+          benchData.decodeOnce(decoder);
         }
       }
     }
@@ -173,28 +232,27 @@ public class BenchmarkTool {
     }
 
     private void performCoding(boolean isEncode) {
-      warmup(isEncode);
+      warmUp(isEncode);
 
-      int times = 5;
       long begin = System.currentTimeMillis();
-      for (int i = 0; i < times; i++) {
+      for (int i = 0; i < testTimes; i++) {
         if (isEncode) {
-          encodeOnce();
+          benchData.encodeOnce(encoder);
         } else {
-          decodeOnce();
+          benchData.decodeOnce(decoder);
         }
       }
       long end = System.currentTimeMillis();
 
-      double usedTime = ((float)(end - begin) / times) / 1000.00f;
-      long usedData = (times * benchData.numDataUnits *
+      double usedTime = end - begin;
+      long usedData = (testTimes * benchData.numDataUnits *
           benchData.chunkSize) / (1024 * 1024);
-      double throughput = usedData / usedTime;
+      double throughput = (usedData * 1000) / usedTime;
 
       DecimalFormat df = new DecimalFormat("#.##");
       String text = isEncode ? "Encode " : "Decode ";
-      text += usedData + "MB data takes " + df.format(usedTime)
-          + " seconds, throughput:" + df.format(throughput) + "MB/s";
+      text += usedData + "MB data takes " + usedTime
+          + " milliseconds, throughput:" + df.format(throughput) + "MB/s";
 
       System.out.println(text);
     }
