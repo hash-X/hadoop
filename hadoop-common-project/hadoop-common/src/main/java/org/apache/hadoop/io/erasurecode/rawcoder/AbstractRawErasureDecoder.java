@@ -42,6 +42,8 @@ public abstract class AbstractRawErasureDecoder extends AbstractRawErasureCoder
                      ByteBuffer[] outputs) {
     checkParameters(inputs, erasedIndexes, outputs);
 
+    System.out.println("Decode called, erasedIndexes = " + Arrays.toString(erasedIndexes));
+
     ByteBuffer validInput = findFirstValidInput(inputs);
     boolean usingDirectBuffer = validInput.isDirect();
     int dataLen = validInput.remaining();
@@ -100,6 +102,8 @@ public abstract class AbstractRawErasureDecoder extends AbstractRawErasureCoder
   @Override
   public void decode(byte[][] inputs, int[] erasedIndexes, byte[][] outputs) {
     checkParameters(inputs, erasedIndexes, outputs);
+
+    System.out.println("Decode called, erasedIndexes = " + Arrays.toString(erasedIndexes));
 
     byte[] validInput = findFirstValidInput(inputs);
     int dataLen = validInput.length;

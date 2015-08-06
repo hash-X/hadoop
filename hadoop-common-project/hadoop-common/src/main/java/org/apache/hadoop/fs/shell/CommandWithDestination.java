@@ -388,7 +388,10 @@ abstract class CommandWithDestination extends FsCommand {
     try {
       PathData tempTarget = target.suffix("._COPYING_");
       targetFs.setWriteChecksum(writeChecksum);
-      targetFs.writeStreamToFile(in, tempTarget, lazyPersist);
+
+      boolean isPut = (this instanceof CopyCommands.Put);
+      boolean isGet = (this instanceof CopyCommands.Get);
+      targetFs.writeStreamToFile(in, tempTarget, lazyPersist, isPut, isGet);
       targetFs.rename(tempTarget, target);
     } finally {
       targetFs.close(); // last ditch effort to ensure temp file is removed
@@ -459,11 +462,17 @@ abstract class CommandWithDestination extends FsCommand {
     }
 
     void writeStreamToFile(InputStream in, PathData target,
-                           boolean lazyPersist) throws IOException {
+            boolean lazyPersist, boolean isPut, boolean isGet) throws IOException {
       FSDataOutputStream out = null;
       try {
         out = create(target, lazyPersist);
-        IOUtils.generateAndCopy(out, getConf());
+        if (isPut) {
+          IOUtils.generateAndCopy(out, getConf());
+        } else if (isGet) {
+          IOUtils.copyAndDiscard(in, getConf());
+        } else {
+          IOUtils.copyBytes(in, out, getConf(), true);
+        }
       } finally {
         IOUtils.closeStream(out); // just in case copyBytes didn't
       }

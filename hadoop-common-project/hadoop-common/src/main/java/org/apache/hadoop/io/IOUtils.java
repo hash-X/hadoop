@@ -82,12 +82,41 @@ public class IOUtils {
     byte buf[] = new byte[buffSize];
     new Random().nextBytes(buf);
 
+    int i = 0;
     try {
-      for (int i = 0; i < times; i++) {
+      for (; i < times; i++) {
         out.write(buf);
       }
     } finally {
       closeStream(out);
+    }
+
+    if (i == times) {
+      System.out.println("Generating and writing 12GB data to HDFS (no local disk)");
+    } else {
+      System.out.println("Failed generating and writing 12GB data to HDFS (no local disk)");
+    }
+  }
+
+  public static void copyAndDiscard(InputStream in, Configuration conf)
+      throws IOException {
+
+    int times = 96;
+    int buffSize = 128 * 1024 * 1024; // 128MB
+    byte buf[] = new byte[buffSize];
+    int i = 0;
+    try {
+      for (; i < times; i++) {
+        in.read(buf);
+      }
+    } finally {
+      closeStream(in);
+    }
+
+    if (i == times) {
+      System.out.println("Reading from HDFS and throwing away 12GB data (no local disk)");
+    } else {
+      System.out.println("Failed reading from HDFS and throwing away 12GB data (no local disk)");
     }
   }
   

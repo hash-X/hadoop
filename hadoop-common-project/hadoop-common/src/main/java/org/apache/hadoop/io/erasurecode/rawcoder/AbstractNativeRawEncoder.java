@@ -59,8 +59,8 @@ public abstract class AbstractNativeRawEncoder
   @Override
   protected void doEncode(byte[][] inputs, int[] inputOffsets, int dataLen,
                           byte[][] outputs, int[] outputOffsets) {
-    doEncodeByConvertingToDirectBuffers(inputs, inputOffsets, dataLen,
-            outputs, outputOffsets);
+    System.out.println("WARNING: doEncodeByConvertingToDirectBuffers is used, not efficiently!!");
+    doEncodeByConvertingToDirectBuffers(inputs, inputOffsets, dataLen, outputs, outputOffsets);
   }
 
   @Override
