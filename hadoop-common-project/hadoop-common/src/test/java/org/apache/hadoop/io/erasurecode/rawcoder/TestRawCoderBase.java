@@ -48,7 +48,7 @@ public abstract class TestRawCoderBase extends TestCoderBase {
    * coding buffers are shared, which may have bugs.
    */
   protected void testCodingDoMixed() {
-    testCoding(true);
+    //testCoding(true);
     testCoding(false);
   }
 
@@ -68,8 +68,8 @@ public abstract class TestRawCoderBase extends TestCoderBase {
      * The following runs will use 3 different chunkSize for inputs and outputs,
      * to verify the same encoder/decoder can process variable width of data.
      */
-    performTestCoding(baseChunkSize, false, false, false);
-    //performTestCoding(baseChunkSize - 17, false, false, false);
+    //performTestCoding(baseChunkSize, false, false, false);
+    performTestCoding(baseChunkSize - 17, false, false, false);
     //performTestCoding(baseChunkSize + 16, true, false, false);
   }
 

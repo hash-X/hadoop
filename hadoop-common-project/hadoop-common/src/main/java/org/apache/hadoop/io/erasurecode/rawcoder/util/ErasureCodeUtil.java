@@ -145,6 +145,44 @@ public final class ErasureCodeUtil {
 
   public static void encodeData(byte[] gftbls, ByteBuffer[] inputs,
                                 ByteBuffer[] outputs) {
+    int numInputs = inputs.length;
+    int numOutputs = outputs.length;
+    int dataLen = inputs[0].remaining();
+    int l, i, j, iPos, oPos;
+    ByteBuffer input, output;
+    byte s;
+    for (l = 0; l < numOutputs; l++) {
+      output = outputs[l];
+
+      for (j = 0; j < numInputs; j++) {
+        input = inputs[j];
+        iPos = input.position();
+        oPos = output.position();
+
+        s = gftbls[j * 32 + l * numInputs * 32 + 1];
+
+        for (i = 0; i < dataLen / 4; i++, iPos += 4, oPos += 4) {
+          output.put(oPos + 0, (byte) (output.get(oPos + 0) ^
+              GaloisFieldUtil.gfMul(input.get(iPos + 0), s)));
+          output.put(oPos + 1, (byte) (output.get(oPos + 1) ^
+              GaloisFieldUtil.gfMul(input.get(iPos + 1), s)));
+          output.put(oPos + 2, (byte) (output.get(oPos + 2) ^
+              GaloisFieldUtil.gfMul(input.get(iPos + 2), s)));
+          output.put(oPos + 3, (byte) (output.get(oPos + 3) ^
+              GaloisFieldUtil.gfMul(input.get(iPos + 3), s)));
+        }
+        /*
+        for (i = 0; i < dataLen; i++) {
+          output.put(oPos, (byte) (output.get(oPos) ^
+              GaloisFieldUtil.gfMul(input.get(iPos++), s)));
+          oPos++;
+        }*/
+      }
+    }
+  }
+
+  public static void encodeDataOld(byte[] gftbls, ByteBuffer[] inputs,
+                                ByteBuffer[] outputs) {
     int[] inputOffsets = new int[inputs.length];
     for (int i = 0; i < inputs.length; i++) {
       inputOffsets[i] = inputs[i].position();
