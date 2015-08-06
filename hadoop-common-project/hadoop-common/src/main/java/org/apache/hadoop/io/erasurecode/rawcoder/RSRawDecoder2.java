@@ -24,6 +24,7 @@ import org.apache.hadoop.io.erasurecode.rawcoder.util.GaloisFieldUtil;
 import org.apache.hadoop.io.erasurecode.rawcoder.util.RSUtil;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * A raw erasure decoder in RS code scheme in pure Java in case native one
@@ -37,6 +38,7 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
   private byte[] invertMatrix;
   private byte[] tmpMatrix;
   private byte[] gftbls;
+  private int[] erasedIndexes;
   private int[] validIndexes;
   private int numErasedDataUnits;
   private boolean[] erasureFlags;
@@ -83,40 +85,40 @@ public class RSRawDecoder2 extends AbstractRawErasureDecoder {
   }
 
   private <T> void prepareDecoding(T[] inputs, int[] erasedIndexes) {
-    decodeMatrix = new byte[numAllUnits * numDataUnits];
-    tmpMatrix = new byte[numAllUnits * numDataUnits];
-    invertMatrix = new byte[numAllUnits * numDataUnits];
-    gftbls = new byte[numAllUnits * getNumDataUnits() * 32];
-    validIndexes = new int[numDataUnits];
-    erasureFlags = new boolean[numAllUnits];
-    numErasedDataUnits = 0;
-
-    for (int i = 0, r = 0; i < numDataUnits; i++, r++) {
-      while (inputs[r] == null) {
-        r++;
-      }
-      validIndexes[i] = r;
+    int[] tmpValidIndexes = new int[numDataUnits];
+    makeValidIndexes(inputs, tmpValidIndexes);
+    if (Arrays.equals(this.erasedIndexes, erasedIndexes) &&
+        Arrays.equals(this.validIndexes, tmpValidIndexes)) {
+      return; // Optimization. Nothing to do
     }
+    this.erasedIndexes = Arrays.copyOf(erasedIndexes, erasedIndexes.length);
+    this.validIndexes = Arrays.copyOf(tmpValidIndexes, tmpValidIndexes.length);
 
     processErasures(erasedIndexes);
+  }
+
+  private void processErasures(int[] erasedIndexes) {
+    this.decodeMatrix = new byte[numAllUnits * numDataUnits];
+    this.tmpMatrix = new byte[numAllUnits * numDataUnits];
+    this.invertMatrix = new byte[numAllUnits * numDataUnits];
+    this.gftbls = new byte[numAllUnits * getNumDataUnits() * 32];
+
+    this.erasureFlags = new boolean[numAllUnits];
+    this.numErasedDataUnits = 0;
+
+    for (int i = 0; i < erasedIndexes.length; i++) {
+      int index = erasedIndexes[i];
+      erasureFlags[index] = true;
+      if (index < numDataUnits) {
+        numErasedDataUnits++;
+      }
+    }
 
     generateDecodeMatrix(erasedIndexes);
 
     ErasureCodeUtil.initTables(numDataUnits, erasedIndexes.length,
         decodeMatrix, 0, gftbls);
     //System.out.println(DumpUtil.bytesToHex(gftbls, 9999999));
-  }
-
-  private void processErasures(int[] erasedIndexes) {
-    int i, index;
-
-    for (i = 0; i < erasedIndexes.length; i++) {
-      index = erasedIndexes[i];
-      erasureFlags[index] = true;
-      if (index < numDataUnits) {
-        numErasedDataUnits++;
-      }
-    }
   }
 
   // Generate decode matrix from encode matrix

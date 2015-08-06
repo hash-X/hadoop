@@ -79,7 +79,7 @@ public class BenchmarkTool {
           + coderNames[coderIndex]);
 
       RawErasureCoderFactory maker = coderMakers[coderIndex];
-      CoderBench bench = new CoderBench(maker, coderIndex == 2 ? 10000 : 10);
+      CoderBench bench = new CoderBench(maker, coderIndex == 2 ? 10000 : 20);
       bench.performEncode();
       bench.performDecode();
     }
@@ -100,7 +100,7 @@ public class BenchmarkTool {
 
     final boolean useDirectBuffer;
     final int numAllUnits = numDataUnits + numParityUnits;
-    final int chunkSize = 64 * 1024 * 1024; // MB
+    final int chunkSize = 8 * 1024 * 1024; // MB
     final byte[][] inputs = new byte[numDataUnits][];
     final byte[][] outputs = new byte[numParityUnits][];
     final byte[][] decodeInputs = new byte[numAllUnits][];

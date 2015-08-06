@@ -24,6 +24,6 @@ public class Benchmark {
 
   @Test
   public void benchmarkTest() {
-    BenchmarkTool.performBench(0, 1, 2);
+    BenchmarkTool.performBench(0, 1);
   }
 }
