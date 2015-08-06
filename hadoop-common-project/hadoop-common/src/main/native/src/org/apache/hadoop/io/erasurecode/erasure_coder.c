@@ -110,12 +110,13 @@ static int processErasures(DecoderState* pCoderState, unsigned char** inputs,
     }
   }
 
+  for (i = 0; i < numDataUnits; i++) {
+    pCoderState->realInputs[i] = inputs[pCoderState->decodeIndex[i]];
+  }
+
   if (isChanged == 0 &&
           compare(pCoderState->erasedIndexes, pCoderState->numErased,
                            erasedIndexes, numErased) == 0) {
-    for (i = 0; i < numDataUnits; i++) {
-      pCoderState->realInputs[i] = inputs[pCoderState->decodeIndex[i]];
-    }
     return 0; // Optimization, nothing to do
   }
 
@@ -165,13 +166,10 @@ int decode(DecoderState* pCoderState, unsigned char** inputs,
 void clearDecoder(DecoderState* decoder) {
   memset(decoder->gftbls, 0, sizeof(decoder->gftbls));
   memset(decoder->decodeMatrix, 0, sizeof(decoder->decodeMatrix));
-  memset(decoder->decodeIndex, 0, sizeof(decoder->decodeIndex));
   memset(decoder->tmpMatrix, 0, sizeof(decoder->tmpMatrix));
   memset(decoder->invertMatrix, 0, sizeof(decoder->invertMatrix));
   memset(decoder->erasureFlags, 0, sizeof(decoder->erasureFlags));
   memset(decoder->erasedIndexes, 0, sizeof(decoder->erasedIndexes));
-  decoder->numErased = 0;
-  decoder->numErasedDataUnits = 0;
 }
 
 // Generate decode matrix from encode matrix
