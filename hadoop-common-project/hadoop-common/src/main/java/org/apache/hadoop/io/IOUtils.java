@@ -78,7 +78,7 @@ public class IOUtils {
   public static void generateAndCopy(OutputStream out, Configuration conf)
       throws IOException {
 
-    int times = 96;
+    long times = 96;
     int buffSize = 128 * 1024 * 1024; // 128MB
     byte buf[] = new byte[buffSize];
     new Random().nextBytes(buf);
@@ -104,12 +104,12 @@ public class IOUtils {
   public static void copyAndDiscard(InputStream in, Configuration conf)
       throws IOException {
 
-    int times = 96;
+    long times = 96;
     int buffSize = 128 * 1024 * 1024; // 128MB
     byte buf[] = new byte[buffSize];
     long read = 0;
     try {
-      for (int i = 0; i < times; i++) {
+      while(read < times * buffSize) {
         read += in.read(buf);
       }
     } finally {
