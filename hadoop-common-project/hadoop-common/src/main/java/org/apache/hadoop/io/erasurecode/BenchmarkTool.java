@@ -19,8 +19,12 @@ package org.apache.hadoop.io.erasurecode;
 
 import org.apache.hadoop.io.erasurecode.rawcoder.*;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.DecimalFormat;
+import java.nio.channels.FileChannel;
 import java.util.Random;
 
 public class BenchmarkTool {
@@ -41,56 +45,64 @@ public class BenchmarkTool {
     if (message != null) {
       System.out.println(message);
     }
-    System.out.println("BenchmarkTool [-list list coder indexes]");
-    System.out.println("              [-bench <coder-index>]");
+    System.out.println("BenchmarkTool <testDir>");
     System.exit(1);
   }
 
-  public static void main(String[] args) {
-    boolean wantList = false;
-    boolean wantBench = false;
-    int coderIndex = -1;
+  public static void main(String[] args) throws Exception {
+    File testDir = null, testDataFile = null;
 
-    if (args.length == 1 && args[0].equals("-list")) {
-      wantList = true;
-    } else if (args.length == 2 && args[0].equals("-bench")) {
-      wantBench = true;
-      coderIndex = Integer.valueOf(args[1]);
-      if (coderIndex < 0 || coderIndex > coderNames.length - 1) {
-        usage("Invalid coder index");
+    if (args.length == 1) {
+      testDir = new File(args[0]);
+      if (!testDir.exists() || !testDir.isDirectory()) {
+        usage("Invalid testDir");
       }
-    } else if (args.length > 0) {
-      usage("Invalid option");
     } else {
-      //usage(null);
-      performBench(0, 1);
+      usage(null);
     }
 
-    if (wantList) {
-      printCoders();
-    } else if (wantBench) {
-      performBench(coderIndex);
-    }
+    performBench(testDir);
   }
 
-  public static void performBench(int... coderIndexes) {
-    for (int coderIndex : coderIndexes) {
+  static int[] getCoderIndexes() {
+    return new int[] {0, 1};
+  }
+
+  public static void performBench(File testDir) throws Exception {
+    File testDataFile = new File(testDir, "generated-benchtest-data.dat");
+    generateTestData(testDataFile);
+
+    for (int coderIndex : getCoderIndexes()) {
       System.out.println("Performing benchmark test for "
           + coderNames[coderIndex]);
 
-      RawErasureCoderFactory maker = coderMakers[coderIndex];
-      CoderBench bench = new CoderBench(maker, coderIndex == 2 ? 10000 : 20);
-      bench.performEncode();
-      bench.performDecode();
+      File encodedDataFile = new File(testDir,
+          "encoded-benchtest-data" + coderIndex + ".dat");
+      File decodedDataFile = new File(testDir,
+          "decoded-benchtest-data" + coderIndex + ".dat");
+
+      RawErasureCoderFactory coderMaker = coderMakers[coderIndex];
+      CoderBench bench = new CoderBench(coderMaker);
+      bench.performEncode(testDataFile, encodedDataFile);
+      //bench.performDecode(encodedDataFile, decodedDataFile, testDataFile);
     }
   }
 
-  private static void printCoders() {
-    StringBuilder sb = new StringBuilder("Available coders:\n");
-    for (int i = 0; i < coderNames.length; i++) {
-      sb.append(i).append(":").append(coderNames[i]).append("\n");
+  static void generateTestData(File testDataFile) throws IOException {
+    FileOutputStream out = new FileOutputStream(testDataFile);
+    Random random = new Random();
+    long times = 1;
+    int buffSize = 64 * 1024 * 1024; // MB
+    byte buf[] = new byte[buffSize];
+
+    try {
+      for (int i = 0; i < times; i++) {
+        random.nextBytes(buf);
+        out.write(buf);
+      }
+    } finally {
+      out.close();
     }
-    System.out.println(sb.toString());
   }
 
   static class BenchData {
@@ -100,35 +112,24 @@ public class BenchmarkTool {
 
     final boolean useDirectBuffer;
     final int numAllUnits = numDataUnits + numParityUnits;
-    final int chunkSize = 8 * 1024 * 1024; // MB
-    final byte[][] inputs = new byte[numDataUnits][];
-    final byte[][] outputs = new byte[numParityUnits][];
-    final byte[][] decodeInputs = new byte[numAllUnits][];
+    final int chunkSize = 16 * 1024 * 1024; // MB
     final int[] erasedIndexes = new int[]{0, 5, 8};
-    final byte[][] decodeOutputs = new byte[erasedIndexes.length][];
-
-    final ByteBuffer[] inputs2 = new ByteBuffer[numDataUnits];
-    final ByteBuffer[] outputs2 = new ByteBuffer[numParityUnits];
-    final ByteBuffer[] decodeInputs2 = new ByteBuffer[numAllUnits];
-    final ByteBuffer[] decodeOutputs2 = new ByteBuffer[erasedIndexes.length];
+    final ByteBuffer[] inputs = new ByteBuffer[numDataUnits];
+    final ByteBuffer[] outputs = new ByteBuffer[numParityUnits];
+    final ByteBuffer[] decodeInputs = new ByteBuffer[numAllUnits];
+    final ByteBuffer[] decodeOutputs = new ByteBuffer[erasedIndexes.length];
 
     BenchData(boolean useDirectBuffer) {
       this.useDirectBuffer = useDirectBuffer;
-      if (useDirectBuffer) {
-        initWithDirectByteBuffer();
-      } else {
-        initWithBytesArrayBuffer();
-      }
-    }
 
-    private void initWithBytesArrayBuffer() {
       for (int i = 0; i < inputs.length; i++) {
-        inputs[i] = new byte[chunkSize];
-        rand.nextBytes(inputs[i]);
+        inputs[i] = useDirectBuffer ? ByteBuffer.allocateDirect(chunkSize) :
+            ByteBuffer.allocate(chunkSize);
       }
 
       for (int i = 0; i < outputs.length; i++) {
-        outputs[i] = new byte[chunkSize];
+        outputs[i] = useDirectBuffer ? ByteBuffer.allocateDirect(chunkSize) :
+            ByteBuffer.allocate(chunkSize);
       }
 
       System.arraycopy(inputs, 0, decodeInputs, 0, numDataUnits);
@@ -138,108 +139,76 @@ public class BenchmarkTool {
       }
 
       for (int i = 0; i < decodeOutputs.length; i++) {
-        decodeOutputs[i] = new byte[chunkSize];
+        decodeOutputs[i] = useDirectBuffer ?
+            ByteBuffer.allocateDirect(chunkSize) :
+            ByteBuffer.allocate(chunkSize);
       }
     }
 
-    private void initWithDirectByteBuffer() {
-      byte[] tmpBuf = new byte[chunkSize];
-      ByteBuffer tmp;
-      for (int i = 0; i < inputs2.length; i++) {
-        rand.nextBytes(tmpBuf);
-        tmp = ByteBuffer.allocateDirect(chunkSize);
-        tmp.put(tmpBuf);
-        tmp.flip();
-        inputs2[i] = tmp;
-      }
-
-      for (int i = 0; i < outputs.length; i++) {
-        outputs2[i] = ByteBuffer.allocateDirect(chunkSize);;
-      }
-
-      System.arraycopy(inputs2, 0, decodeInputs2, 0, numDataUnits);
-      System.arraycopy(outputs2, 0, decodeInputs2, numDataUnits, numParityUnits);
-      for (int i = 0; i < erasedIndexes.length; i++) {
-        decodeInputs2[erasedIndexes[i]] = null;
-      }
-
-      for (int i = 0; i < decodeOutputs2.length; i++) {
-        decodeOutputs2[i] = ByteBuffer.allocateDirect(chunkSize);
-      }
+    void encode(RawErasureEncoder encoder) {
+      encoder.encode(inputs, outputs);
     }
 
-    void encodeOnce(RawErasureEncoder encoder) {
-      if (useDirectBuffer) {
-        encoder.encode(inputs2, outputs2);
-      } else {
-        encoder.encode(inputs, outputs);
-      }
-    }
-
-    void decodeOnce(RawErasureDecoder decoder) {
-      if (useDirectBuffer) {
-        decoder.decode(decodeInputs2, erasedIndexes, decodeOutputs2);
-      } else {
-        decoder.decode(decodeInputs, erasedIndexes, decodeOutputs);
-      }
+    void decode(RawErasureDecoder decoder) {
+      decoder.decode(decodeInputs, erasedIndexes, decodeOutputs);
     }
   }
 
   static class CoderBench {
-    static BenchData bytesArrayBufferBenchData;
-    static BenchData directByteBufferBenchData;
+    static BenchData heapBufferBenchData;
+    static BenchData directBufferBenchData;
     final RawErasureEncoder encoder;
     final RawErasureDecoder decoder;
-    final int testTimes;
     BenchData benchData;
 
-
-    CoderBench(RawErasureCoderFactory maker, int testTimes) {
-      this.testTimes = testTimes;
-      encoder = maker.createEncoder(benchData.numDataUnits, benchData.numParityUnits);
-      decoder = maker.createDecoder(benchData.numDataUnits,
+    CoderBench(RawErasureCoderFactory coderMaker) throws IOException {
+      encoder = coderMaker.createEncoder(benchData.numDataUnits,
+          benchData.numParityUnits);
+      decoder = coderMaker.createDecoder(benchData.numDataUnits,
           benchData.numParityUnits);
       if (encoder.preferDirectBuffer()) {
-        if (directByteBufferBenchData == null) {
-          directByteBufferBenchData = new BenchData(true);
+        if (directBufferBenchData == null) {
+          directBufferBenchData = new BenchData(true);
         }
-        benchData = directByteBufferBenchData;
+        benchData = directBufferBenchData;
       } else {
-        if (bytesArrayBufferBenchData == null) {
-          bytesArrayBufferBenchData = new BenchData(false);
+        if (heapBufferBenchData == null) {
+          heapBufferBenchData = new BenchData(false);
         }
-        benchData = bytesArrayBufferBenchData;
+        benchData = heapBufferBenchData;
       }
     }
 
-    private void warmUp(boolean isEncode) {
-      int times = 3;
-      for (int i = 0; i < times; i++) {
-        if (isEncode) {
-          benchData.encodeOnce(encoder);
-        } else {
-          benchData.decodeOnce(decoder);
+    void performEncode(File testDataFile, File resultDataFile) throws Exception {
+      FileChannel inputChannel = new FileInputStream((testDataFile)).getChannel();
+      FileChannel outputChannel = new FileOutputStream(resultDataFile).getChannel();
+
+      long got;
+      while (true) {
+        got = inputChannel.read(benchData.inputs);
+        if (got < 1) {
+          break;
         }
+
+        benchData.encode(encoder);
+        outputChannel.write(benchData.inputs);
+        outputChannel.write(benchData.outputs);
       }
     }
 
-    void performEncode() {
-      performCoding(true);
+    void performDecode(File encodedDataFile, File resultDataFile,
+                       File originalDataFile) {
+
     }
 
-    void performDecode() {
-      performCoding(false);
-    }
-
+    /*
     private void performCoding(boolean isEncode) {
-      warmUp(isEncode);
-
       long begin = System.currentTimeMillis();
       for (int i = 0; i < testTimes; i++) {
         if (isEncode) {
-          benchData.encodeOnce(encoder);
+          benchData.encode(encoder);
         } else {
-          benchData.decodeOnce(decoder);
+          benchData.decode(decoder);
         }
       }
       long end = System.currentTimeMillis();
@@ -255,6 +224,17 @@ public class BenchmarkTool {
           + " milliseconds, throughput:" + df.format(throughput) + "MB/s";
 
       System.out.println(text);
+    }
+    */
+
+    void readTestData(FileInputStream in,
+                             ByteBuffer[] inputBuffers) throws IOException {
+      in.getChannel().read(inputBuffers);
+    }
+
+    void writeTestData(FileOutputStream out,
+                              ByteBuffer[] outputBuffers) throws IOException {
+      out.getChannel().write(outputBuffers);
     }
   }
 }

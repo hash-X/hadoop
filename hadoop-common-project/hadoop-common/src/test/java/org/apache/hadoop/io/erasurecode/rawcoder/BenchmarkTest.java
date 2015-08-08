@@ -17,13 +17,27 @@
  */
 package org.apache.hadoop.io.erasurecode.rawcoder;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.io.erasurecode.BenchmarkTool;
+import org.junit.Before;
 import org.junit.Test;
 
-public class Benchmark {
+import java.io.File;
+import java.io.IOException;
+
+public class BenchmarkTest {
+  private File testDir;
+
+  @Before
+  public void setup() throws IOException {
+    String testDirPath = System.getProperty("target",
+        "target/ec-coder-bench");
+    testDir = new File(testDirPath);
+    FileUtils.forceMkdir(testDir);
+  }
 
   @Test
-  public void benchmarkTest() {
-    BenchmarkTool.performBench(0, 1);
+  public void benchmarkTest() throws Exception {
+    BenchmarkTool.performBench(testDir);
   }
 }
