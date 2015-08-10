@@ -1,29 +1,4 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.hadoop.hdfs;
-
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -40,71 +15,26 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.log4j.Level;
 
-/**
- * This class benchmarks the performance of the local file system, raw local
- * file system and HDFS at reading and writing files. The user should invoke
- * the main of this class and optionally include a repetition count.
- */
-public class BenchmarkThroughput extends Configured implements Tool {
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.File;
+import java.util.ArrayList;
 
-  // the property in the config that specifies a working directory
+public class BenchmarkTool extends Configured implements Tool {
+
   private LocalDirAllocator dir;
   private long startTime;
-  // the size of the buffer to use
+
   private int BUFFER_SIZE;
 
-  private void resetMeasurements() {
-    startTime = Time.now();
-  }
+  private void resetMeasurements() { startTime = Time.now(); }
 
   private void printMeasurements() {
     System.out.println(" time: " +
-                       ((Time.now() - startTime)/1000));
-  }
-
-  private Path writeLocalFile(String name, Configuration conf,
-                                     long total) throws IOException {
-    Path path = dir.getLocalPathForWrite(name, total, conf);
-    System.out.print("Writing " + name);
-    resetMeasurements();
-    OutputStream out = new FileOutputStream(new File(path.toString()));
-    byte[] data = new byte[BUFFER_SIZE];
-    for(long size=0; size < total; size += BUFFER_SIZE) {
-      out.write(data);
-    }
-    out.close();
-    printMeasurements();
-    return path;
-  }
-
-  private void readLocalFile(Path path,
-                                    String name,
-                                    Configuration conf) throws IOException {
-    System.out.print("Reading " + name);
-    resetMeasurements();
-    InputStream in = new FileInputStream(new File(path.toString()));
-    byte[] data = new byte[BUFFER_SIZE];
-    long size = 0;
-    while (size >= 0) {
-      size = in.read(data);
-    }
-    in.close();
-    printMeasurements();
-  }
-
-  private void writeAndReadLocalFile(String name,
-                                            Configuration conf,
-                                            long size
-                                           ) throws IOException {
-    Path f = null;
-    try {
-      f = writeLocalFile(name, conf, size);
-      readLocalFile(f, name, conf);
-    } finally {
-      if (f != null) {
-        new File(f.toString()).delete();
-      }
-    }
+        (Time.now() - startTime) / 1000 + " seconds");
   }
 
   private Path writeFile(FileSystem fs,
@@ -117,7 +47,7 @@ public class BenchmarkThroughput extends Configured implements Tool {
     resetMeasurements();
     OutputStream out = fs.create(f);
     byte[] data = new byte[BUFFER_SIZE];
-    for(long size = 0; size < total; size += BUFFER_SIZE) {
+    for (long size = 0; size < total; size += BUFFER_SIZE) {
       out.write(data);
     }
     out.close();
@@ -135,7 +65,7 @@ public class BenchmarkThroughput extends Configured implements Tool {
     InputStream in = fs.open(f);
     byte[] data = new byte[BUFFER_SIZE];
     long val = 0;
-    while (val >= 0) {
+    while (val >=0) {
       val = in.read(data);
     }
     in.close();
@@ -162,17 +92,61 @@ public class BenchmarkThroughput extends Configured implements Tool {
     }
   }
 
+  private Path writeLocalFile(String name, Configuration conf,
+                              long total) throws IOException {
+    Path path = dir.getLocalPathForWrite(name, total, conf);
+    System.out.print("Writing " + name);
+    resetMeasurements();
+    OutputStream out = new FileOutputStream(new File(path.toString()));
+    byte[] data = new byte[BUFFER_SIZE];
+    for(long size=0; size < total; size += BUFFER_SIZE) {
+      out.write(data);
+    }
+    out.close();
+    printMeasurements();
+    return path;
+  }
+
+  private void writeAndReadLocalFile(String name,
+                                     Configuration conf,
+                                     long size
+  ) throws IOException {
+    Path f = null;
+    try {
+      f = writeLocalFile(name, conf, size);
+      readLocalFile(f, name, conf);
+    } finally {
+      if (f != null) {
+        new File(f.toString()).delete();
+      }
+    }
+  }
+
+  private void readLocalFile(Path path,
+                             String name,
+                             Configuration conf) throws IOException {
+    System.out.print("Reading " + name);
+    resetMeasurements();
+    InputStream in = new FileInputStream(new File(path.toString()));
+    byte[] data = new byte[BUFFER_SIZE];
+    long size = 0;
+    while (size >= 0) {
+      size = in.read(data);
+    }
+    in.close();
+    printMeasurements();
+  }
+
   private static void printUsage() {
     ToolRunner.printGenericCommandUsage(System.err);
-    System.err.println("Usage: dfsthroughput [#reps]");
+    System.err.println("Only one argument here.");
     System.err.println("Config properties:\n" +
-      "  dfsthroughput.file.size:\tsize of each write/read (10GB)\n" +
-      "  dfsthroughput.buffer.size:\tbuffer size for write/read (4k)\n");
+        "  dfsthroughput.file.size:\tsize of each write/read (12GB)\n" +
+        "  dfsthroughput.buffer.size:\tbuffer size for write/read (4k)\n");
   }
 
   @Override
-  public int run(String[] args) throws IOException {
-    // silence the minidfs cluster
+  public int run(String[] args) throws Exception {
     Log hadoopLog = LogFactory.getLog("org");
     if (hadoopLog instanceof Log4JLogger) {
       ((Log4JLogger) hadoopLog).getLogger().setLevel(Level.WARN);
@@ -181,7 +155,7 @@ public class BenchmarkThroughput extends Configured implements Tool {
     if (args.length == 1) {
       try {
         reps = Integer.parseInt(args[0]);
-      } catch (NumberFormatException e) {
+      }catch (NumberFormatException e) {
         printUsage();
         return -1;
       }
@@ -190,25 +164,24 @@ public class BenchmarkThroughput extends Configured implements Tool {
       return -1;
     }
     Configuration conf = getConf();
-    // the size of the file to write
     long SIZE = conf.getLong("dfsthroughput.file.size",
-        10L * 1024 * 1024 * 1024);
+        12L * 1024 * 1024 * 1024);
     BUFFER_SIZE = conf.getInt("dfsthroughput.buffer.size", 4 * 1024);
 
+    // A shared directory for temporary files.
     String localDir = conf.get("mapred.temp.dir");
-
-    System.out.println("localDir = " + localDir); // null
+    System.out.println("localDir = " + localDir);
 
     if (localDir == null) {
       localDir = conf.get("hadoop.tmp.dir");
-      System.out.println("localDir = " + localDir); // build/test
+      System.out.println("localDir = " + localDir);
       conf.set("mapred.temp.dir", localDir);
     }
 
     dir = new LocalDirAllocator("mapred.temp.dir");
-
     System.setProperty("test.build.data", localDir);
     System.out.println("Local = " + localDir);
+
     ChecksumFileSystem checkedLocal = FileSystem.getLocal(conf);
     FileSystem rawLocal = checkedLocal.getRawFileSystem();
 
@@ -220,7 +193,7 @@ public class BenchmarkThroughput extends Configured implements Tool {
     MiniDFSCluster cluster = null;
     try {
       cluster = new MiniDFSCluster.Builder(conf)
-                                  .racks(new String[]{"/foo"}).build();
+          .racks(new String[]{"/foo"}).build();
       ArrayList<DataNode> listNodes = cluster.getDataNodes();
       System.out.println("listNodes's size is = " + listNodes.size()
           + "Datanode ID is = " + listNodes.get(0).getDatanodeId());
@@ -239,12 +212,9 @@ public class BenchmarkThroughput extends Configured implements Tool {
     return 0;
   }
 
-  /**
-   * @param args arguments
-   */
   public static void main(String[] args) throws Exception {
     int res = ToolRunner.run(new HdfsConfiguration(),
-        new BenchmarkThroughput(), args);
+        new BenchmarkTool(), args);
     System.exit(res);
   }
 

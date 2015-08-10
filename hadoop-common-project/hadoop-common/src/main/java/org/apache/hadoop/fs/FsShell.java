@@ -278,8 +278,10 @@ public class FsShell extends Configured implements Tool {
     init();
 
     int exitCode = -1;
+    // if user print's command's length is less than 1 line, so wrong.
     if (argv.length < 1) {
       printUsage(System.err);
+      System.out.println("user print's command's length is less than 1 line");
     } else {
       String cmd = argv[0];
       Command instance = null;
