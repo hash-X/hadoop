@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.io.erasurecode.rawcoder;
 
+import org.apache.hadoop.io.erasurecode.ErasureCodeNative;
+import org.junit.Assume;
 import org.junit.Before;
 
 /**
@@ -26,6 +28,8 @@ public class TestRSRawCoderInteroperable1 extends TestRSRawCoderBase {
 
   @Before
   public void setup() {
+    Assume.assumeTrue(ErasureCodeNative.isNativeCodeLoaded());
+    
     this.encoderClass = RSRawEncoder2.class;
     this.decoderClass = NativeRSRawDecoder.class;
     setAllowDump(false);

@@ -30,17 +30,25 @@ public class ErasureCodeNative {
   private static final Log LOG =
       LogFactory.getLog(ErasureCodeNative.class.getName());
 
-  private static boolean nativeIsalLoaded = false;
+  /**
+   * The reason why ISA-L library is not available, or null if it is available.
+   */
+  private final static String loadingFailureReason;
 
   static {
-    if (NativeCodeLoader.isNativeCodeLoaded() &&
-        NativeCodeLoader.buildSupportsIsal()) {
+    if (!NativeCodeLoader.isNativeCodeLoaded()) {
+      loadingFailureReason = "hadoop native library cannot be loaded.";
+    } else if (!NativeCodeLoader.buildSupportsIsal()) {
+      loadingFailureReason = "ISA-L isn't supported in the building";
+    } else {
+      String problem = null;
       try {
         loadLibrary();
-        nativeIsalLoaded = true;
       } catch (Throwable t) {
-        LOG.error("Failed to load ISA-L", t);
+        problem = "Loading ISA-L failed: " + t.getMessage();
+        LOG.error("Loading ISA-L failed", t);
       }
+      loadingFailureReason = problem;
     }
   }
 
@@ -48,17 +56,15 @@ public class ErasureCodeNative {
    * Are native libraries loaded?
    */
   public static boolean isNativeCodeLoaded() {
-    return nativeIsalLoaded;
+    return loadingFailureReason == null;
   }
 
   /**
    * Is the native ISA-L library loaded & initialized? Throw exception if not.
    */
   public static void checkNativeCodeLoaded() {
-    if (!nativeIsalLoaded) {
-      throw new RuntimeException("Native ISA-L library not available: " +
-          "this version of libhadoop was built without " +
-          "ISA-L support.");
+    if (loadingFailureReason != null) {
+      throw new RuntimeException(loadingFailureReason);
     }
   }
 
@@ -80,4 +86,8 @@ public class ErasureCodeNative {
    * detect concrete error.
    */
   public static native void verifyTest();
+
+  public static String getLoadingFailureReason() {
+    return loadingFailureReason;
+  }
 }

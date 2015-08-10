@@ -194,7 +194,8 @@ Maven build goals:
     This option is recommended if you plan on making use of native raw erasure
     coders and want to get more repeatable builds.
   * Use -Disal.prefix to specify a nonstandard location for the libisal
-    library files. You do not need this option if you have installed isal.
+    library files. You do not need this option if you have installed ISA-L to the
+    system library path.
   * Use -Disal.lib to specify a nonstandard location for the libisal library
     files.
   * Use -Dbundle.isal to copy the contents of the isal.lib directory into

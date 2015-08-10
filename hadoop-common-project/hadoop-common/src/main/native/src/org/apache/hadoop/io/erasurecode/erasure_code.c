@@ -46,6 +46,11 @@
  */
 
 /**
+ * The loaded library handle.
+ */
+static void* libec = NULL;
+
+/**
  * A helper function to dlsym a 'symbol' from a given library-handle.
  */
 
@@ -159,7 +164,6 @@ static const char* load_functions(void* libec) {
 }
 
 void load_erasurecode_lib(char* err, size_t err_len) {
-  static void* libec = NULL;
   const char* errMsg;
 
   err[0] = '\0';
@@ -192,6 +196,32 @@ void load_erasurecode_lib(char* err, size_t err_len) {
   if (errMsg != NULL) {
     snprintf(err, err_len, "Loading functions from ISA-L failed: %s", errMsg);
   }
+}
+
+char* get_library_name() {
+#ifdef UNIX
+  Dl_info dl_info;
+
+  if (d_ec_encode_data == NULL) {
+    return HADOOP_ISAL_LIBRARY;
+  }
+
+  if(dladdr(d_ec_encode_data, &dl_info)) {
+    return dl_info.dli_fname;
+  }
+#else
+  LPTSTR filename = NULL;
+
+  if (libec == NULL) {
+    return HADOOP_ISAL_LIBRARY;
+  }
+
+  if (GetModuleFileName(libec, filename, 256) > 0) {
+    return filename;
+  }
+#endif
+
+  return NULL;
 }
 
 unsigned char h_gf_mul(unsigned char a, unsigned char b) {

@@ -17,16 +17,22 @@
  */
 package org.apache.hadoop.io.erasurecode;
 
+import org.junit.Assume;
+import org.junit.Before;
 import org.junit.Test;
 
 /**
  * Test native erasure code library.
  */
 public class TestNativeErasureCode {
+
+  @Before
+  public void before() {
+    Assume.assumeTrue(ErasureCodeNative.isNativeCodeLoaded());
+  }
+
   @Test
   public void testNativeLibrry() {
-    if (ErasureCodeNative.isNativeCodeLoaded()) {
-      ErasureCodeNative.verifyTest();
-    }
+    ErasureCodeNative.verifyTest();
   }
 }

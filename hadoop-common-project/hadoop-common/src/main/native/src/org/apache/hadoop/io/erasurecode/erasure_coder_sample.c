@@ -57,8 +57,11 @@ int main(int argc, char *argv[]) {
   if (strlen(errMsg) > 0) {
     // TODO: this may indicate s severe error instead, failing the test.
     fprintf(stderr,
-      "loading erasurecode library failed: %s, skipping this\n", errMsg);
+      "Loading erasurecode library failed: %s, skipping this\n", errMsg);
     return 0;
+  } else {
+    fprintf(stdout,
+      "Will run this sample using %s\n", get_library_name());  
   }
 
   if (argc != 3) usage(NULL);

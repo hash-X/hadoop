@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.io.erasurecode;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.io.erasurecode.rawcoder.*;
 
 import java.io.File;
@@ -197,8 +198,12 @@ public class BenchmarkTool {
     }
 
     void performDecode(File encodedDataFile, File resultDataFile,
-                       File originalDataFile) {
+                       File originalDataFile) throws IOException {
 
+
+      if (FileUtils.contentEquals(resultDataFile, originalDataFile)) {
+        throw new RuntimeException("Decoding failed, not the same with the original file");
+      }
     }
 
     /*

@@ -71,7 +71,7 @@ public class NativeLibraryChecker {
     String hadoopLibraryName = "";
     String zlibLibraryName = "";
     String snappyLibraryName = "";
-    String isalLibraryName = "";
+    String isalDetail = "";
     String lz4LibraryName = "";
     String bzip2LibraryName = "";
     String winutilsPath = null;
@@ -89,19 +89,22 @@ public class NativeLibraryChecker {
         snappyLibraryName = SnappyCodec.getLibraryName();
       }
 
-      isalLoaded = NativeCodeLoader.buildSupportsIsal() &&
-              ErasureCodeNative.isNativeCodeLoaded();
-      if (NativeCodeLoader.buildSupportsIsal()) {
-        isalLibraryName = ErasureCodeNative.getLibraryName();
+      isalDetail = ErasureCodeNative.getLoadingFailureReason();
+      if (isalDetail != null) {
+        isalLoaded = false;
+      } else {
+        isalDetail = ErasureCodeNative.getLibraryName();
+        isalLoaded = true;
       }
 
-      if (OpensslCipher.getLoadingFailureReason() != null) {
-        openSslDetail = OpensslCipher.getLoadingFailureReason();
+      openSslDetail = OpensslCipher.getLoadingFailureReason();
+      if (openSslDetail != null) {
         openSslLoaded = false;
       } else {
         openSslDetail = OpensslCipher.getLibraryName();
         openSslLoaded = true;
       }
+
       if (lz4Loaded) {
         lz4LibraryName = Lz4Codec.getLibraryName();
       }
@@ -125,7 +128,7 @@ public class NativeLibraryChecker {
     System.out.printf("lz4:     %b %s%n", lz4Loaded, lz4LibraryName);
     System.out.printf("bzip2:   %b %s%n", bzip2Loaded, bzip2LibraryName);
     System.out.printf("openssl: %b %s%n", openSslLoaded, openSslDetail);
-    System.out.printf("ISA-L:   %b %s%n", isalLoaded, isalLibraryName);
+    System.out.printf("ISA-L:   %b %s%n", isalLoaded, isalDetail);
 
     if (Shell.WINDOWS) {
       System.out.printf("winutils: %b %s%n", winutilsExists, winutilsPath);

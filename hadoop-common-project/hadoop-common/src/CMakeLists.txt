@@ -164,9 +164,11 @@ if (ISAL_LIBRARY)
             ${D}/io/erasurecode/erasure_coder_sample.c
         )
         target_link_libraries(erasure_coder_sample ${CMAKE_DL_LIBS})
-
+else (ISAL_LIBRARY)
+    IF(REQUIRE_ISAL)
+        MESSAGE(FATAL_ERROR "Required ISA-L library could not be found.  ISAL_LIBRARY=${ISAL_LIBRARY}, CUSTOM_ISAL_PREFIX=${CUSTOM_ISAL_PREFIX}")
+    ENDIF(REQUIRE_ISAL)
 endif (ISAL_LIBRARY)
-
 
 SET(STORED_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
 set_find_shared_library_version("1")

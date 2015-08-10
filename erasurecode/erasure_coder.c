@@ -232,7 +232,6 @@ void dumpEncoder(EncoderState* pCoderState) {
 void dumpDecoder(DecoderState* pCoderState) {
   int i, j;
   int numDataUnits = ((CoderState*)pCoderState)->numDataUnits;
-  int numParityUnits = ((CoderState*)pCoderState)->numParityUnits;
   int numAllUnits = ((CoderState*)pCoderState)->numAllUnits;
 
   printf("Recovering (numAllUnits = %d, numDataUnits = %d, numErased = %d)\n",
@@ -290,3 +289,5 @@ void dumpCodingMatrix(unsigned char* buf, int n1, int n2) {
   }
   printf("\n");
 }
+
+
