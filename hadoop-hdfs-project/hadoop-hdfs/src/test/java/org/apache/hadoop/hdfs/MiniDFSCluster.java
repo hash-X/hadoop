@@ -2295,6 +2295,7 @@ public class MiniDFSCluster {
       }
     }
     LOG.info("Cluster is active");
+    System.out.println("Cluster is active");
   }
   
   private synchronized boolean shouldWait(DatanodeInfo[] dnInfo,

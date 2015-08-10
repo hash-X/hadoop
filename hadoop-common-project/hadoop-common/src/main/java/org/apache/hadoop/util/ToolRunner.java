@@ -67,6 +67,8 @@ public class ToolRunner {
     
     //get the args w/o generic hadoop args
     String[] toolArgs = parser.getRemainingArgs();
+    for (String str : toolArgs)
+      System.out.println("some command from user input : " + str);
     return tool.run(toolArgs);
   }
   

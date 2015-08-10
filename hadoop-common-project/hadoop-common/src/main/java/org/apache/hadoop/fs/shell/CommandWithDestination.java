@@ -30,17 +30,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 
-import org.apache.hadoop.fs.CreateFlag;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FilterFileSystem;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.PathExistsException;
-import org.apache.hadoop.fs.PathIOException;
-import org.apache.hadoop.fs.PathIsDirectoryException;
-import org.apache.hadoop.fs.PathIsNotDirectoryException;
-import org.apache.hadoop.fs.PathNotFoundException;
-import org.apache.hadoop.fs.PathOperationException;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.AclEntry;
 import org.apache.hadoop.fs.permission.AclUtil;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -464,6 +454,7 @@ abstract class CommandWithDestination extends FsCommand {
     void writeStreamToFile(InputStream in, PathData target,
             boolean lazyPersist, boolean isPut, boolean isGet) throws IOException {
       FSDataOutputStream out = null;
+      FSDataInputStream fis = null; //
       try {
         out = create(target, lazyPersist);
         if (isPut) {

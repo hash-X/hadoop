@@ -23,6 +23,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -33,6 +34,7 @@ import org.apache.hadoop.fs.ChecksumFileSystem;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalDirAllocator;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
@@ -170,6 +172,7 @@ public class BenchmarkThroughput extends Configured implements Tool {
 
   @Override
   public int run(String[] args) throws IOException {
+    System.out.println("BenchmarkThroughput run method have invoked...");
     // silence the minidfs cluster
     Log hadoopLog = LogFactory.getLog("org");
     if (hadoopLog instanceof Log4JLogger) {
@@ -194,8 +197,10 @@ public class BenchmarkThroughput extends Configured implements Tool {
     BUFFER_SIZE = conf.getInt("dfsthroughput.buffer.size", 4 * 1024);
 
     String localDir = conf.get("mapred.temp.dir");
+    System.out.println("localDir = " + localDir); // null
     if (localDir == null) {
       localDir = conf.get("hadoop.tmp.dir");
+      System.out.println("localDir = " + localDir); // build/test
       conf.set("mapred.temp.dir", localDir);
     }
     dir = new LocalDirAllocator("mapred.temp.dir");
@@ -204,6 +209,7 @@ public class BenchmarkThroughput extends Configured implements Tool {
     System.out.println("Local = " + localDir);
     ChecksumFileSystem checkedLocal = FileSystem.getLocal(conf);
     FileSystem rawLocal = checkedLocal.getRawFileSystem();
+
     for(int i=0; i < reps; ++i) {
       writeAndReadLocalFile("local", conf, SIZE);
       writeAndReadFile(rawLocal, "raw", conf, SIZE);
@@ -213,6 +219,9 @@ public class BenchmarkThroughput extends Configured implements Tool {
     try {
       cluster = new MiniDFSCluster.Builder(conf)
                                   .racks(new String[]{"/foo"}).build();
+      ArrayList<DataNode> listNodes = cluster.getDataNodes();
+      System.out.println("listNodes's size is = " + listNodes.size()
+          + "Datanode ID is = " + listNodes.get(0).getDatanodeId());
       cluster.waitActive();
       FileSystem dfs = cluster.getFileSystem();
       for(int i=0; i < reps; ++i) {

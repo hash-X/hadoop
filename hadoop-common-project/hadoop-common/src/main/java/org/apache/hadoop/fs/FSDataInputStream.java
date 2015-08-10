@@ -83,9 +83,11 @@ public class FSDataInputStream extends DataInputStream
    *         if there is no more data because the end of the stream has been
    *         reached
    */
+  static int i = 0;
   @Override
   public int read(long position, byte[] buffer, int offset, int length)
     throws IOException {
+    System.out.println("Client invoke FSDataInputStream.read() numbers =  " + (i++) +'\n');
     return ((PositionedReadable)in).read(position, buffer, offset, length);
   }
 
@@ -101,9 +103,11 @@ public class FSDataInputStream extends DataInputStream
    *                      If an exception is thrown an undetermined number
    *                      of bytes in the buffer may have been written. 
    */
+  static int j = 0;
   @Override
   public void readFully(long position, byte[] buffer, int offset, int length)
     throws IOException {
+    System.out.println("Client invoke FSDataInputStream.readFully() numbers =  " + (j++) +'\n');
     ((PositionedReadable)in).readFully(position, buffer, offset, length);
   }
   

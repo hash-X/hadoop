@@ -353,9 +353,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
 
     return lastBlockBeingWrittenLength;
   }
-
+  static int i = 0;
   /** Read the block length from one of the datanodes. */
   private long readBlockLength(LocatedBlock locatedblock) throws IOException {
+    System.out.println("DFSInputStream readBlockLength() have invoked for " + (i++) + "times\n");
     assert locatedblock != null : "LocatedBlock cannot be null";
     int replicaNotFoundCount = locatedblock.getLocations().length;
     
@@ -967,8 +968,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   /**
    * Read the entire buffer.
    */
+  static int j = 0;
   @Override
   public synchronized int read(final byte buf[], int off, int len) throws IOException {
+    System.out.println("DFSInputStream's read(, ,) have invoked for " + j + "times\n");
     ReaderStrategy byteArrayReader = new ByteArrayStrategy(buf, off, len);
     TraceScope scope =
         dfsClient.getPathTraceScope("DFSInputStream#byteArrayRead", src);
@@ -979,8 +982,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     }
   }
 
+  static int k = 0;
   @Override
   public synchronized int read(final ByteBuffer buf) throws IOException {
+    System.out.println("DFSInputStream's read() have invoked for "+k+"times\n");
     ReaderStrategy byteBufferReader = new ByteBufferStrategy(buf);
     TraceScope scope =
         dfsClient.getPathTraceScope("DFSInputStream#byteBufferRead", src);
