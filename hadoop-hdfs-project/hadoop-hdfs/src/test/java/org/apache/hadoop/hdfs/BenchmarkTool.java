@@ -30,6 +30,11 @@ public class BenchmarkTool extends Configured implements Tool {
 
   private int BUFFER_SIZE;
 
+  private int times;
+
+  Configuration conf = getConf();
+  long SIZE = conf.getLong("dfsthroughput.file.size",
+      12L * 1024 * 1024 * 1024);
   private void resetMeasurements() { startTime = Time.now(); }
 
   private void printMeasurements() {
@@ -127,6 +132,31 @@ public class BenchmarkTool extends Configured implements Tool {
     }
   }
 
+  class WriteAndReadLocalFile implements Runnable {
+    @Override
+    public void run() {
+        try {
+            writeAndReadLocalFile("local", conf, SIZE);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+    }
+  }
+
+  class WriteAndReadFile implements Runnable {
+    @Override
+    public void run(){
+      try {
+          ChecksumFileSystem checkedLocal = FileSystem.getLocal(conf);
+          FileSystem rawLocal = checkedLocal.getRawFileSystem();
+          writeAndReadFile(rawLocal, "raw", conf, SIZE);
+          writeAndReadFile(checkedLocal, "checked", conf, SIZE);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
   private void readLocalFile(Path path,
                              String name,
                              Configuration conf) throws IOException {
@@ -161,6 +191,7 @@ public class BenchmarkTool extends Configured implements Tool {
     if (args.length == 1) {
       try {
         reps = Integer.parseInt(args[0]);
+        times = reps;
       }catch (NumberFormatException e) {
         printUsage();
         return -1;
@@ -169,9 +200,6 @@ public class BenchmarkTool extends Configured implements Tool {
       printUsage();
       return -1;
     }
-    Configuration conf = getConf();
-    long SIZE = conf.getLong("dfsthroughput.file.size",
-        12L * 1024 * 1024 * 1024);
     BUFFER_SIZE = conf.getInt("dfsthroughput.buffer.size", 4 * 1024);
 
     // A shared directory for temporary files.
@@ -192,13 +220,13 @@ public class BenchmarkTool extends Configured implements Tool {
     ChecksumFileSystem checkedLocal = FileSystem.getLocal(conf);
     FileSystem rawLocal = checkedLocal.getRawFileSystem();
 
-    for(int i=0; i < reps; ++i) {
-      // benchmarks the performance of the local file system
-      writeAndReadLocalFile("local", conf, SIZE);
-      // benchmarks the performance of the raw file system
-      writeAndReadFile(rawLocal, "raw", conf, SIZE);
-      // benchmarks the performance of the checksum file system
-      writeAndReadFile(checkedLocal, "checked", conf, SIZE);
+    WriteAndReadLocalFile wdl = new WriteAndReadLocalFile();
+    for (int i = 0;i<5;i++){
+      Thread threadwdl = new Thread(wdl);
+      threadwdl.start();
+      WriteAndReadFile wd = new WriteAndReadFile();
+      Thread threadwd = new Thread(wd);
+      threadwd.start();
     }
 
     MiniDFSCluster cluster = null;
