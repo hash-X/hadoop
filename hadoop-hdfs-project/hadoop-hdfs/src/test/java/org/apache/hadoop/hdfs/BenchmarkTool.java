@@ -42,6 +42,7 @@ public class BenchmarkTool extends Configured implements Tool {
                                 Configuration conf,
                                 long total
                                 ) throws IOException {
+    System.out.println("BenchmarkTool writeFile()......");
     Path f = dir.getLocalPathForWrite(name, total, conf);
     System.out.print("Writing " + name);
     resetMeasurements();
@@ -60,6 +61,7 @@ public class BenchmarkTool extends Configured implements Tool {
                                String name,
                                Configuration conf
                                ) throws IOException {
+    System.out.println("BenchmarkTool readFile()......");
     System.out.print("Reading " + name);
     resetMeasurements();
     InputStream in = fs.open(f);
@@ -77,6 +79,7 @@ public class BenchmarkTool extends Configured implements Tool {
                                        Configuration conf,
                                        long size
                                        ) throws IOException {
+    System.out.println("BenchmarkTool writeAndReadFile()......");
     Path f = null;
     try {
       f = writeFile(fs, name, conf, size);
@@ -94,6 +97,7 @@ public class BenchmarkTool extends Configured implements Tool {
 
   private Path writeLocalFile(String name, Configuration conf,
                               long total) throws IOException {
+    System.out.println("BenchmarkTool writeLocalFile()......");
     Path path = dir.getLocalPathForWrite(name, total, conf);
     System.out.print("Writing " + name);
     resetMeasurements();
@@ -111,6 +115,7 @@ public class BenchmarkTool extends Configured implements Tool {
                                      Configuration conf,
                                      long size
   ) throws IOException {
+    System.out.println("BenchmarkTool writeAndLocalFile()......");
     Path f = null;
     try {
       f = writeLocalFile(name, conf, size);
@@ -125,6 +130,7 @@ public class BenchmarkTool extends Configured implements Tool {
   private void readLocalFile(Path path,
                              String name,
                              Configuration conf) throws IOException {
+    System.out.println("BenchmarkTool readLocalFile()......");
     System.out.print("Reading " + name);
     resetMeasurements();
     InputStream in = new FileInputStream(new File(path.toString()));
@@ -182,14 +188,19 @@ public class BenchmarkTool extends Configured implements Tool {
     System.setProperty("test.build.data", localDir);
     System.out.println("Local = " + localDir);
 
+
     ChecksumFileSystem checkedLocal = FileSystem.getLocal(conf);
     FileSystem rawLocal = checkedLocal.getRawFileSystem();
 
     for(int i=0; i < reps; ++i) {
+      // benchmarks the performance of the local file system
       writeAndReadLocalFile("local", conf, SIZE);
+      // benchmarks the performance of the raw file system
       writeAndReadFile(rawLocal, "raw", conf, SIZE);
+      // benchmarks the performance of the checksum file system
       writeAndReadFile(checkedLocal, "checked", conf, SIZE);
     }
+
     MiniDFSCluster cluster = null;
     try {
       cluster = new MiniDFSCluster.Builder(conf)

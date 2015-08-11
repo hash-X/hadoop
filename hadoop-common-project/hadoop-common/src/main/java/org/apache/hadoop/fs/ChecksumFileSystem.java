@@ -85,8 +85,9 @@ public abstract class ChecksumFileSystem extends FilterFileSystem {
 
   /** Return the name of the checksum file associated with a file.*/
   public Path getChecksumFile(Path file) {
+    System.out.println("ChecksumFileSystem.getChecksumFile(Path file)");
     return new Path(file.getParent(), "." + file.getName() + ".crc");
-  }
+}
 
   /** Return true iff file is a checksum file name.*/
   public static boolean isChecksumFile(Path file) {
