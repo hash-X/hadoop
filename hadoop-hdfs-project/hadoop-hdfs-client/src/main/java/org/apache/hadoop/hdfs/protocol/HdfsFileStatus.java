@@ -48,6 +48,8 @@ public class HdfsFileStatus {
 
   private final FileEncryptionInfo feInfo;
 
+  private final ErasureCodingPolicy ecPolicy;
+  
   // Used by dir, not including dot and dotdot. Always zero for a regular file.
   private final int childrenNum;
   private final byte storagePolicy;
@@ -73,7 +75,7 @@ public class HdfsFileStatus {
       long blocksize, long modification_time, long access_time,
       FsPermission permission, String owner, String group, byte[] symlink,
       byte[] path, long fileId, int childrenNum, FileEncryptionInfo feInfo,
-      byte storagePolicy) {
+      byte storagePolicy, ErasureCodingPolicy ecPolicy) {
     this.length = length;
     this.isdir = isdir;
     this.block_replication = (short)block_replication;
@@ -93,6 +95,7 @@ public class HdfsFileStatus {
     this.childrenNum = childrenNum;
     this.feInfo = feInfo;
     this.storagePolicy = storagePolicy;
+    this.ecPolicy = ecPolicy;
   }
 
   /**
@@ -248,6 +251,10 @@ public class HdfsFileStatus {
 
   public final FileEncryptionInfo getFileEncryptionInfo() {
     return feInfo;
+  }
+
+  public ErasureCodingPolicy getErasureCodingPolicy() {
+    return ecPolicy;
   }
 
   public final int getChildrenNum() {

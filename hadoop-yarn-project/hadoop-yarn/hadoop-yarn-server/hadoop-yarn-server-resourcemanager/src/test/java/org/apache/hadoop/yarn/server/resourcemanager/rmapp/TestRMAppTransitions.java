@@ -212,11 +212,11 @@ public class TestRMAppTransitions {
           renewer, new AMRMTokenSecretManager(conf, this.rmContext),
           new RMContainerTokenSecretManager(conf),
           new NMTokenSecretManagerInRM(conf),
-          new ClientToAMTokenSecretManagerInRM());
+          new ClientToAMTokenSecretManagerInRM(),
+          writer);
     ((RMContextImpl)realRMContext).setStateStore(store);
     publisher = mock(SystemMetricsPublisher.class);
-    realRMContext.setSystemMetricsPublisher(publisher);
-    realRMContext.setRMApplicationHistoryWriter(writer);
+    ((RMContextImpl)realRMContext).setSystemMetricsPublisher(publisher);
 
     this.rmContext = spy(realRMContext);
 

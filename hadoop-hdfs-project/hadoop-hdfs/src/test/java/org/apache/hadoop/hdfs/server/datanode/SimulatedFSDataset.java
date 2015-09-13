@@ -42,6 +42,7 @@ import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.BlockListAsLongs;
 import org.apache.hadoop.hdfs.protocol.BlockLocalPathInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
+import org.apache.hadoop.hdfs.protocol.HdfsBlocksMetadata;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeReference;
@@ -99,7 +100,7 @@ public class SimulatedFSDataset implements FsDatasetSpi<FsVolumeSpi> {
 
   public static byte simulatedByte(Block b, long offsetInBlk) {
     byte firstByte = (byte) (b.getBlockId() & BYTE_MASK);
-    return (byte) ((firstByte + offsetInBlk) & BYTE_MASK);
+    return (byte) ((firstByte + offsetInBlk % 29) & BYTE_MASK);
   }
   
   public static final String CONFIG_PROPERTY_CAPACITY =
@@ -259,11 +260,6 @@ public class SimulatedFSDataset implements FsDatasetSpi<FsVolumeSpi> {
         return new ReplicaOutputStreams(oStream, crcStream, requestedChecksum,
             volume.isTransientStorage());
       }
-    }
-
-    @Override
-    public OutputStream createRestartMetaStream() throws IOException {
-      return new SimulatedOutputStream();
     }
 
     @Override
@@ -1240,6 +1236,12 @@ public class SimulatedFSDataset implements FsDatasetSpi<FsVolumeSpi> {
 
   @Override
   public BlockLocalPathInfo getBlockLocalPathInfo(ExtendedBlock b) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public HdfsBlocksMetadata getHdfsBlocksMetadata(String bpid, long[] blockIds)
+      throws IOException {
     throw new UnsupportedOperationException();
   }
 

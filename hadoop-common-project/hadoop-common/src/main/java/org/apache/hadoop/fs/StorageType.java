@@ -33,11 +33,10 @@ import org.apache.hadoop.util.StringUtils;
 @InterfaceAudience.Public
 @InterfaceStability.Unstable
 public enum StorageType {
-  // sorted by the speed of the storage types, from fast to slow
-  RAM_DISK(true),
-  SSD(false),
   DISK(false),
-  ARCHIVE(false);
+  SSD(false),
+  ARCHIVE(false),
+  RAM_DISK(true);
 
   private final boolean isTransient;
 

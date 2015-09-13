@@ -628,12 +628,6 @@ public class FilterFileSystem extends FileSystem {
   }
 
   @Override
-  public BlockStoragePolicySpi getStoragePolicy(final Path src)
-      throws IOException {
-    return fs.getStoragePolicy(src);
-  }
-
-  @Override
   public Collection<? extends BlockStoragePolicySpi> getAllStoragePolicies()
       throws IOException {
     return fs.getAllStoragePolicies();

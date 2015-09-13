@@ -54,8 +54,6 @@ import org.apache.hadoop.yarn.server.api.protocolrecords.NodeHeartbeatRequest;
 import org.apache.hadoop.yarn.server.api.protocolrecords.NodeHeartbeatResponse;
 import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerRequest;
 import org.apache.hadoop.yarn.server.api.protocolrecords.RegisterNodeManagerResponse;
-import org.apache.hadoop.yarn.server.api.protocolrecords.UnRegisterNodeManagerRequest;
-import org.apache.hadoop.yarn.server.api.protocolrecords.UnRegisterNodeManagerResponse;
 import org.apache.hadoop.yarn.server.applicationhistoryservice.ApplicationHistoryServer;
 import org.apache.hadoop.yarn.server.applicationhistoryservice.ApplicationHistoryStore;
 import org.apache.hadoop.yarn.server.applicationhistoryservice.MemoryApplicationHistoryStore;
@@ -289,12 +287,10 @@ public class MiniYARNCluster extends CompositeService {
   }
 
   private synchronized void initResourceManager(int index, Configuration conf) {
-    Configuration newConf = resourceManagers.length > 1 ?
-        new YarnConfiguration(conf) : conf;
-    if (HAUtil.isHAEnabled(newConf)) {
-      newConf.set(YarnConfiguration.RM_HA_ID, rmIds[index]);
+    if (HAUtil.isHAEnabled(conf)) {
+      conf.set(YarnConfiguration.RM_HA_ID, rmIds[index]);
     }
-    resourceManagers[index].init(newConf);
+    resourceManagers[index].init(conf);
     resourceManagers[index].getRMContext().getDispatcher().register(
         RMAppAttemptEventType.class,
         new EventHandler<RMAppAttemptEvent>() {
@@ -333,11 +329,10 @@ public class MiniYARNCluster extends CompositeService {
     } catch (Throwable t) {
       throw new YarnRuntimeException(t);
     }
-    Configuration conf = resourceManagers[index].getConfig();
     LOG.info("MiniYARN ResourceManager address: " +
-        conf.get(YarnConfiguration.RM_ADDRESS));
+        getConfig().get(YarnConfiguration.RM_ADDRESS));
     LOG.info("MiniYARN ResourceManager web address: " +
-        WebAppUtils.getRMWebAppURLWithoutScheme(conf));
+        WebAppUtils.getRMWebAppURLWithoutScheme(getConfig()));
   }
 
   @InterfaceAudience.Private
@@ -357,6 +352,7 @@ public class MiniYARNCluster extends CompositeService {
       resourceManagers[index].stop();
       resourceManagers[index] = null;
     }
+    Configuration conf = getConfig();
     resourceManagers[index] = new ResourceManager();
     initResourceManager(index, getConfig());
     startResourceManager(index);
@@ -437,7 +433,6 @@ public class MiniYARNCluster extends CompositeService {
   private class ResourceManagerWrapper extends AbstractService {
     private int index;
 
-
     public ResourceManagerWrapper(int i) {
       super(ResourceManagerWrapper.class.getName() + "_" + i);
       index = i;
@@ -453,11 +448,10 @@ public class MiniYARNCluster extends CompositeService {
     @Override
     protected synchronized void serviceStart() throws Exception {
       startResourceManager(index);
-      Configuration conf = resourceManagers[index].getConfig();
       LOG.info("MiniYARN ResourceManager address: " +
-          conf.get(YarnConfiguration.RM_ADDRESS));
-      LOG.info("MiniYARN ResourceManager web address: " + WebAppUtils
-          .getRMWebAppURLWithoutScheme(conf));
+               getConfig().get(YarnConfiguration.RM_ADDRESS));
+      LOG.info("MiniYARN ResourceManager web address: " +
+               WebAppUtils.getRMWebAppURLWithoutScheme(getConfig()));
       super.serviceStart();
     }
 
@@ -643,14 +637,6 @@ public class MiniYARNCluster extends CompositeService {
                 throw e;
               }
               return response;
-            }
-
-            @Override
-            public UnRegisterNodeManagerResponse unRegisterNodeManager(
-                UnRegisterNodeManagerRequest request) throws YarnException,
-                IOException {
-              return recordFactory
-                  .newRecordInstance(UnRegisterNodeManagerResponse.class);
             }
           };
         }

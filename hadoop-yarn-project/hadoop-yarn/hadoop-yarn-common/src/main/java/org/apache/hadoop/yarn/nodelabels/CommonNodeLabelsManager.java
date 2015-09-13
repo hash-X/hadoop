@@ -288,8 +288,7 @@ public class CommonNodeLabelsManager extends AbstractService {
     }
     List<NodeLabel> newLabels = new ArrayList<NodeLabel>();
     normalizeNodeLabels(labels);
-    // check any mismatch in exclusivity no mismatch with skip
-    checkExclusivityMatch(labels);
+
     // do a check before actual adding them, will throw exception if any of them
     // doesn't meet label name requirement
     for (NodeLabel label : labels) {
@@ -916,7 +915,7 @@ public class CommonNodeLabelsManager extends AbstractService {
     }
   }
 
-  public static void checkAndThrowLabelName(String label) throws IOException {
+  private void checkAndThrowLabelName(String label) throws IOException {
     if (label == null || label.isEmpty() || label.length() > MAX_LABEL_LENGTH) {
       throw new IOException("label added is empty or exceeds "
           + MAX_LABEL_LENGTH + " character(s)");
@@ -929,23 +928,6 @@ public class CommonNodeLabelsManager extends AbstractService {
       throw new IOException("label name should only contains "
           + "{0-9, a-z, A-Z, -, _} and should not started with {-,_}"
           + ", now it is=" + label);
-    }
-  }
-
-  private void checkExclusivityMatch(Collection<NodeLabel> labels)
-      throws IOException {
-    ArrayList<NodeLabel> mismatchlabels = new ArrayList<NodeLabel>();
-    for (NodeLabel label : labels) {
-      RMNodeLabel rmNodeLabel = this.labelCollections.get(label.getName());
-      if (rmNodeLabel != null
-          && rmNodeLabel.getIsExclusive() != label.isExclusive()) {
-        mismatchlabels.add(label);
-      }
-    }
-    if (mismatchlabels.size() > 0) {
-      throw new IOException(
-          "Exclusivity cannot be modified for an existing label with : "
-              + StringUtils.join(mismatchlabels.iterator(), ","));
     }
   }
 
@@ -1011,18 +993,13 @@ public class CommonNodeLabelsManager extends AbstractService {
     }
   }
   
-  public Set<NodeLabel> getLabelsInfoByNode(NodeId nodeId) {
-    try {
-      readLock.lock();
-      Set<String> labels = getLabelsByNode(nodeId, nodeCollections);
-      if (labels.isEmpty()) {
-        return EMPTY_NODELABEL_SET;
-      }
-      Set<NodeLabel> nodeLabels = createNodeLabelFromLabelNames(labels);
-      return nodeLabels;
-    } finally {
-      readLock.unlock();
+  private Set<NodeLabel> getLabelsInfoByNode(NodeId nodeId) {
+    Set<String> labels = getLabelsByNode(nodeId, nodeCollections);
+    if (labels.isEmpty()) {
+      return EMPTY_NODELABEL_SET;
     }
+    Set<NodeLabel> nodeLabels = createNodeLabelFromLabelNames(labels);
+    return nodeLabels;
   }
 
   private Set<NodeLabel> createNodeLabelFromLabelNames(Set<String> labels) {

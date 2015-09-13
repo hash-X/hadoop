@@ -24,20 +24,15 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainer;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.NodeType;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.AssignmentInformation;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerApp;
-import org.apache.hadoop.yarn.util.resource.Resources;
 
 @Private
 @Unstable
 public class CSAssignment {
-  public static final CSAssignment NULL_ASSIGNMENT =
-      new CSAssignment(Resources.createResource(0, 0), NodeType.NODE_LOCAL);
 
-  public static final CSAssignment SKIP_ASSIGNMENT = new CSAssignment(true);
-
-  private Resource resource;
+  final private Resource resource;
   private NodeType type;
-  private RMContainer excessReservation;
-  private FiCaSchedulerApp application;
+  private final RMContainer excessReservation;
+  private final FiCaSchedulerApp application;
   private final boolean skipped;
   private boolean fulfilledReservation;
   private final AssignmentInformation assignmentInformation;
@@ -72,10 +67,6 @@ public class CSAssignment {
   public Resource getResource() {
     return resource;
   }
-  
-  public void setResource(Resource resource) {
-    this.resource = resource;
-  }
 
   public NodeType getType() {
     return type;
@@ -89,16 +80,8 @@ public class CSAssignment {
     return application;
   }
 
-  public void setApplication(FiCaSchedulerApp application) {
-    this.application = application;
-  }
-
   public RMContainer getExcessReservation() {
     return excessReservation;
-  }
-
-  public void setExcessReservation(RMContainer rmContainer) {
-    excessReservation = rmContainer;
   }
 
   public boolean getSkipped() {

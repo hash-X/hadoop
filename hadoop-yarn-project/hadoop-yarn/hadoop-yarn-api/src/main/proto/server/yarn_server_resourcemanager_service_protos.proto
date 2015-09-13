@@ -107,11 +107,6 @@ message CheckForDecommissioningNodesResponseProto {
   repeated NodeIdProto decommissioningNodes = 1;
 }
 
-message RefreshClusterMaxPriorityRequestProto {
-}
-message RefreshClusterMaxPriorityResponseProto {
-}
-
 message NodeIdToLabelsNameProto {
   optional NodeIdProto nodeId = 1;
   repeated string nodeLabels = 2;

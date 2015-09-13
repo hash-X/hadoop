@@ -473,11 +473,6 @@ public class Hdfs extends AbstractFileSystem {
   }
 
   @Override
-  public BlockStoragePolicySpi getStoragePolicy(Path src) throws IOException {
-    return dfs.getStoragePolicy(getUriPath(src));
-  }
-
-  @Override
   public Collection<? extends BlockStoragePolicySpi> getAllStoragePolicies()
       throws IOException {
     return Arrays.asList(dfs.getStoragePolicies());

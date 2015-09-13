@@ -304,8 +304,7 @@ public class QueueManager {
       }
     }
     queues.remove(queue.getName());
-    FSParentQueue parent = queue.getParent();
-    parent.removeChildQueue(queue);
+    queue.getParent().getChildQueues().remove(queue);
   }
   
   /**

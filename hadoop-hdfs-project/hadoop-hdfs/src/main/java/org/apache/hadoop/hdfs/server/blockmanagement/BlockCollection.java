@@ -39,12 +39,12 @@ public interface BlockCollection {
   public ContentSummary computeContentSummary(BlockStoragePolicySuite bsps);
 
   /**
-   * @return the number of blocks
+   * @return the number of blocks or block groups
    */ 
   public int numBlocks();
 
   /**
-   * Get the blocks.
+   * Get the blocks (striped or contiguous).
    */
   public BlockInfo[] getBlocks();
 
@@ -55,6 +55,12 @@ public interface BlockCollection {
   public long getPreferredBlockSize();
 
   /**
+   * Get block replication for the collection.
+   * @return block replication value. Return 0 if the file is erasure coded.
+   */
+  public short getPreferredBlockReplication();
+
+  /** 
    * @return the storage policy ID.
    */
   public byte getStoragePolicyID();
@@ -65,7 +71,7 @@ public interface BlockCollection {
   public String getName();
 
   /**
-   * Set the block at the given index.
+   * Set the block (contiguous or striped) at the given index.
    */
   public void setBlock(int index, BlockInfo blk);
 
@@ -73,7 +79,8 @@ public interface BlockCollection {
    * Convert the last block of the collection to an under-construction block
    * and set the locations.
    */
-  public void convertLastBlockToUC(BlockInfo lastBlock, DatanodeStorageInfo[] targets) throws IOException;
+  public void convertLastBlockToUC(BlockInfo lastBlock,
+      DatanodeStorageInfo[] targets) throws IOException;
 
   /**
    * @return whether the block collection is under construction.
@@ -81,7 +88,7 @@ public interface BlockCollection {
   public boolean isUnderConstruction();
 
   /**
-   * @return the id for the block collection
+   * @return whether the block collection is in striping format
    */
-  long getId();
+  public boolean isStriped();
 }

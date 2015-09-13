@@ -48,9 +48,4 @@ public interface SchedulableEntity {
    */
   public ResourceUsage getSchedulingResourceUsage();
   
-  /**
-   * Get the priority of the application
-   */
-  public Priority getPriority();
-
 }

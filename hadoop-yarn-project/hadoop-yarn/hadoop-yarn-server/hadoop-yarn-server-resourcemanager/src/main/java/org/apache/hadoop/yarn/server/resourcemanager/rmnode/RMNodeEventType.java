@@ -34,7 +34,6 @@ public enum RMNodeEventType {
   STATUS_UPDATE,
   REBOOTING,
   RECONNECTED,
-  SHUTDOWN,
 
   // Source: Application
   CLEANUP_APP,

@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.AbstractMap;
@@ -44,7 +45,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.google.common.base.Preconditions;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.ByteBufferReadable;
@@ -364,7 +364,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       ClientDatanodeProtocol cdp = null;
       
       try {
-        cdp = DFSUtilClient.createClientDatanodeProtocolProxy(datanode,
+        cdp = DFSUtil.createClientDatanodeProtocolProxy(datanode,
             dfsClient.getConfiguration(), conf.getSocketTimeout(),
             conf.isConnectToDnViaHostname(), locatedblock);
         
@@ -724,18 +724,12 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * strategy-agnostic.
    */
   interface ReaderStrategy {
-    public int doRead(BlockReader blockReader, int off, int len)
-        throws ChecksumException, IOException;
-
-    /**
-     * Copy data from the src ByteBuffer into the read buffer.
-     * @param src The src buffer where the data is copied from
-     * @param offset Useful only when the ReadStrategy is based on a byte array.
-     *               Indicate the offset of the byte array for copy.
-     * @param length Useful only when the ReadStrategy is based on a byte array.
-     *               Indicate the length of the data to copy.
-     */
-    public int copyFrom(ByteBuffer src, int offset, int length);
+    int read(BlockReader blockReader) throws IOException;
+    int read(BlockReader blockReader, int length) throws IOException;
+    int read(ByteBuffer src);
+    int read(ByteBuffer src, int length);
+    ByteBuffer getReadBuffer();
+    int getTargetLength();
   }
 
   protected void updateReadStatistics(ReadStatistics readStatistics,
@@ -756,24 +750,53 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * Used to read bytes into a byte[]
    */
   private class ByteArrayStrategy implements ReaderStrategy {
-    final byte[] buf;
+    private final byte[] buf;
+    private int offset;
+    private final int targetLength;
 
-    public ByteArrayStrategy(byte[] buf) {
+    public ByteArrayStrategy(byte[] buf, int offset, int targetLength) {
       this.buf = buf;
+      this.offset = offset;
+      this.targetLength = targetLength;
     }
 
     @Override
-    public int doRead(BlockReader blockReader, int off, int len)
-          throws ChecksumException, IOException {
-      int nRead = blockReader.read(buf, off, len);
-      updateReadStatistics(readStatistics, nRead, blockReader);
+    public ByteBuffer getReadBuffer() {
+      return ByteBuffer.wrap(buf, offset, targetLength);
+    }
+
+    @Override
+    public int getTargetLength() {
+      return targetLength;
+    }
+
+    @Override
+    public int read(BlockReader blockReader) throws IOException {
+      return read(blockReader, targetLength);
+    }
+
+    @Override
+    public int read(BlockReader blockReader, int length) throws IOException {
+      int nRead = blockReader.read(buf, offset, length);
+      if (nRead > 0) {
+        updateReadStatistics(readStatistics, nRead, blockReader);
+        offset += nRead;
+      } else {
+        DFSClient.LOG.warn("Zero bytes read");
+      }
       return nRead;
     }
 
     @Override
-    public int copyFrom(ByteBuffer src, int offset, int length) {
-      ByteBuffer writeSlice = src.duplicate();
-      writeSlice.get(buf, offset, length);
+    public int read(ByteBuffer src) {
+      return read(src, src.remaining());
+    }
+
+    @Override
+    public int read(ByteBuffer src, int length) {
+      ByteBuffer dup = src.duplicate();
+      dup.get(buf, offset, length);
+      offset += length;
       return length;
     }
   }
@@ -782,41 +805,57 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * Used to read bytes into a user-supplied ByteBuffer
    */
   protected class ByteBufferStrategy implements ReaderStrategy {
-    final ByteBuffer buf;
-    ByteBufferStrategy(ByteBuffer buf) {
-      this.buf = buf;
+    private final ByteBuffer readBuffer;
+    private final int targetLength;
+
+    ByteBufferStrategy(ByteBuffer readBuffer) {
+      this.readBuffer = readBuffer;
+      this.targetLength = readBuffer.remaining();
     }
 
     @Override
-    public int doRead(BlockReader blockReader, int off, int len)
-        throws ChecksumException, IOException {
-      int oldpos = buf.position();
-      int oldlimit = buf.limit();
-      boolean success = false;
-      try {
-        int ret = blockReader.read(buf);
-        success = true;
-        updateReadStatistics(readStatistics, ret, blockReader);
-        if (ret == 0) {
-          DFSClient.LOG.warn("zero");
-        }
-        return ret;
-      } finally {
-        if (!success) {
-          // Reset to original state so that retries work correctly.
-          buf.position(oldpos);
-          buf.limit(oldlimit);
-        }
-      } 
+    public ByteBuffer getReadBuffer() {
+      return readBuffer;
     }
 
     @Override
-    public int copyFrom(ByteBuffer src, int offset, int length) {
-      ByteBuffer writeSlice = src.duplicate();
-      int remaining = Math.min(buf.remaining(), writeSlice.remaining());
-      writeSlice.limit(writeSlice.position() + remaining);
-      buf.put(writeSlice);
-      return remaining;
+    public int read(BlockReader blockReader) throws IOException {
+      return read(blockReader, readBuffer.remaining());
+    }
+
+    @Override
+    public int read(BlockReader blockReader, int length) throws IOException {
+      ByteBuffer tmpBuf = readBuffer.duplicate();
+      tmpBuf.limit(tmpBuf.position() + length);
+      int nRead = blockReader.read(readBuffer.slice());
+      if (nRead > 0) {
+        readBuffer.position(readBuffer.position() + nRead);
+        updateReadStatistics(readStatistics, nRead, blockReader);
+        return nRead;
+      }
+
+      DFSClient.LOG.warn("Zero bytes read");
+      return nRead;
+    }
+
+    @Override
+    public int getTargetLength() {
+      return targetLength;
+    }
+
+    @Override
+    public int read(ByteBuffer src) {
+      return read(src, src.remaining());
+    }
+
+    @Override
+    public int read(ByteBuffer src, int length) {
+      ByteBuffer dup = src.duplicate();
+      int newLen = Math.min(readBuffer.remaining(), dup.remaining());
+      newLen = Math.min(newLen, length);
+      dup.limit(dup.position() + newLen);
+      readBuffer.put(dup);
+      return newLen;
     }
   }
 
@@ -824,7 +863,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    * name readBuffer() is chosen to imply similarity to readBuffer() in
    * ChecksumFileSystem
    */ 
-  private synchronized int readBuffer(ReaderStrategy reader, int off, int len,
+  private synchronized int readBuffer(ReaderStrategy reader, int realLen,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     IOException ioe;
@@ -840,7 +879,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     while (true) {
       // retry as many times as seekToNewSource allows.
       try {
-        return reader.doRead(blockReader, off, len);
+        return reader.read(blockReader, realLen);
       } catch ( ChecksumException ce ) {
         DFSClient.LOG.warn("Found Checksum error for "
             + getCurrentBlock() + " from " + currentNode
@@ -876,61 +915,65 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     }
   }
 
-  protected synchronized int readWithStrategy(ReaderStrategy strategy, int off, int len) throws IOException {
+  protected synchronized int readWithStrategy(
+      ReaderStrategy strategy) throws IOException {
     dfsClient.checkOpen();
     if (closed.get()) {
       throw new IOException("Stream closed");
     }
-    Map<ExtendedBlock,Set<DatanodeInfo>> corruptedBlockMap 
-      = new HashMap<ExtendedBlock, Set<DatanodeInfo>>();
+    Map<ExtendedBlock,Set<DatanodeInfo>> corruptedBlockMap = new HashMap<>();
     failures = 0;
-    if (pos < getFileLength()) {
-      int retries = 2;
-      while (retries > 0) {
-        try {
-          // currentNode can be left as null if previous read had a checksum
-          // error on the same block. See HDFS-3067
-          if (pos > blockEnd || currentNode == null) {
-            currentNode = blockSeekTo(pos);
-          }
-          int realLen = (int) Math.min(len, (blockEnd - pos + 1L));
-          synchronized(infoLock) {
-            if (locatedBlocks.isLastBlockComplete()) {
-              realLen = (int) Math.min(realLen,
-                  locatedBlocks.getFileLength() - pos);
-            }
-          }
-          int result = readBuffer(strategy, off, realLen, corruptedBlockMap);
-          
-          if (result >= 0) {
-            pos += result;
-          } else {
-            // got a EOS from reader though we expect more data on it.
-            throw new IOException("Unexpected EOS from the reader");
-          }
-          if (dfsClient.stats != null) {
-            dfsClient.stats.incrementBytesRead(result);
-          }
-          return result;
-        } catch (ChecksumException ce) {
-          throw ce;            
-        } catch (IOException e) {
-          if (retries == 1) {
-            DFSClient.LOG.warn("DFS Read", e);
-          }
-          blockEnd = -1;
-          if (currentNode != null) { addToDeadNodes(currentNode); }
-          if (--retries == 0) {
-            throw e;
-          }
-        } finally {
-          // Check if need to report block replicas corruption either read
-          // was successful or ChecksumException occured.
-          reportCheckSumFailure(corruptedBlockMap, 
-              currentLocatedBlock.getLocations().length);
+    if (pos >= getFileLength()) {
+      return -1;
+    }
+
+    int retries = 2;
+    while (retries > 0) {
+      try {
+        // currentNode can be left as null if previous read had a checksum
+        // error on the same block. See HDFS-3067
+        if (pos > blockEnd || currentNode == null) {
+          currentNode = blockSeekTo(pos);
         }
+        int realLen = (int) Math.min(strategy.getTargetLength(),
+            (blockEnd - pos + 1L));
+        synchronized(infoLock) {
+          if (locatedBlocks.isLastBlockComplete()) {
+            realLen = (int) Math.min(realLen,
+                locatedBlocks.getFileLength() - pos);
+          }
+        }
+        int result = readBuffer(strategy, realLen, corruptedBlockMap);
+
+        if (result >= 0) {
+          pos += result;
+        } else {
+          // got a EOS from reader though we expect more data on it.
+          throw new IOException("Unexpected EOS from the reader");
+        }
+        if (dfsClient.stats != null) {
+          dfsClient.stats.incrementBytesRead(result);
+        }
+        return result;
+      } catch (ChecksumException ce) {
+        throw ce;
+      } catch (IOException e) {
+        if (retries == 1) {
+          DFSClient.LOG.warn("DFS Read", e);
+        }
+        blockEnd = -1;
+        if (currentNode != null) { addToDeadNodes(currentNode); }
+        if (--retries == 0) {
+          throw e;
+        }
+      } finally {
+        // Check if need to report block replicas corruption either read
+        // was successful or ChecksumException occured.
+        reportCheckSumFailure(corruptedBlockMap,
+            currentLocatedBlock.getLocations().length);
       }
     }
+
     return -1;
   }
 
@@ -939,11 +982,11 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    */
   @Override
   public synchronized int read(final byte buf[], int off, int len) throws IOException {
-    ReaderStrategy byteArrayReader = new ByteArrayStrategy(buf);
+    ReaderStrategy byteArrayReader = new ByteArrayStrategy(buf, off, len);
     TraceScope scope =
         dfsClient.getPathTraceScope("DFSInputStream#byteArrayRead", src);
     try {
-      return readWithStrategy(byteArrayReader, off, len);
+      return readWithStrategy(byteArrayReader);
     } finally {
       scope.close();
     }
@@ -955,7 +998,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     TraceScope scope =
         dfsClient.getPathTraceScope("DFSInputStream#byteBufferRead", src);
     try {
-      return readWithStrategy(byteBufferReader, 0, buf.remaining());
+      return readWithStrategy(byteBufferReader);
     } finally {
       scope.close();
     }
@@ -1058,9 +1101,9 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       }
     }
     if (chosenNode == null) {
-      DFSClient.LOG.warn("No live nodes contain block " + block.getBlock() +
-          " after checking nodes = " + Arrays.toString(nodes) +
-          ", ignoredNodes = " + ignoredNodes);
+      //DFSClient.LOG.warn("No live nodes contain block " + block.getBlock() +
+      //    " after checking nodes = " + Arrays.toString(nodes) +
+      //    ", ignoredNodes = " + ignoredNodes);
       return null;
     }
     final String dnAddr =
@@ -1098,15 +1141,14 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   }
 
   protected void fetchBlockByteRange(LocatedBlock block, long start, long end,
-      byte[] buf, int offset,
-      Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
+      ByteBuffer buf, Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     block = refreshLocatedBlock(block);
     while (true) {
       DNAddrPair addressPair = chooseDataNode(block, null);
       try {
         actualGetFromOneDataNode(addressPair, block, start, end,
-            buf, offset, corruptedBlockMap);
+            buf, corruptedBlockMap);
         return;
       } catch (IOException e) {
         // Ignore. Already processed inside the function.
@@ -1124,13 +1166,11 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     return new Callable<ByteBuffer>() {
       @Override
       public ByteBuffer call() throws Exception {
-        byte[] buf = bb.array();
-        int offset = bb.position();
         TraceScope scope =
             Trace.startSpan("hedgedRead" + hedgedReadId, parentSpan);
         try {
-          actualGetFromOneDataNode(datanode, block, start, end, buf,
-              offset, corruptedBlockMap);
+          actualGetFromOneDataNode(datanode, block, start, end, bb,
+              corruptedBlockMap);
           return bb;
         } finally {
           scope.close();
@@ -1140,41 +1180,23 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   }
 
   /**
-   * Used when reading contiguous blocks
-   */
-  private void actualGetFromOneDataNode(final DNAddrPair datanode,
-      LocatedBlock block, final long start, final long end, byte[] buf,
-      int offset, Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
-      throws IOException {
-    final int length = (int) (end - start + 1);
-    actualGetFromOneDataNode(datanode, block, start, end, buf,
-        new int[]{offset}, new int[]{length}, corruptedBlockMap);
-  }
-
-  /**
    * Read data from one DataNode.
    * @param datanode the datanode from which to read data
    * @param block the located block containing the requested data
    * @param startInBlk the startInBlk offset of the block
    * @param endInBlk the endInBlk offset of the block
-   * @param buf the given byte array into which the data is read
-   * @param offsets the data may be read into multiple segments of the buf
-   *                (when reading a striped block). this array indicates the
-   *                offset of each buf segment.
-   * @param lengths the length of each buf segment
+   * @param buf the given byte buffer into which the data is read
    * @param corruptedBlockMap map recording list of datanodes with corrupted
    *                          block replica
    */
-  void actualGetFromOneDataNode(final DNAddrPair datanode,
-      LocatedBlock block, final long startInBlk, final long endInBlk,
-      byte[] buf, int[] offsets, int[] lengths,
+  void actualGetFromOneDataNode(final DNAddrPair datanode, LocatedBlock block,
+      final long startInBlk, final long endInBlk, ByteBuffer buf,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     DFSClientFaultInjector.get().startFetchFromDatanode();
     int refetchToken = 1; // only need to get a new access token once
     int refetchEncryptionKey = 1; // only need to get a new encryption key once
     final int len = (int) (endInBlk - startInBlk + 1);
-    checkReadPortions(offsets, lengths, len);
 
     while (true) {
       // cached block locations may have been updated by chooseDataNode()
@@ -1186,13 +1208,21 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
         DFSClientFaultInjector.get().fetchFromDatanodeException();
         reader = getBlockReader(block, startInBlk, len, datanode.addr,
             datanode.storageType, datanode.info);
-        for (int i = 0; i < offsets.length; i++) {
-          int nread = reader.readAll(buf, offsets[i], lengths[i]);
-          updateReadStatistics(readStatistics, nread, reader);
-          if (nread != lengths[i]) {
-            throw new IOException("truncated return from reader.read(): " +
-                "excpected " + lengths[i] + ", got " + nread);
+        ByteBuffer tmp = buf.duplicate();
+        tmp.limit(tmp.position() + len);
+        tmp = tmp.slice();
+        int nread = 0, ret;
+        while (true) {
+          ret = reader.read(tmp);
+          if (ret < 0) {
+            break;
           }
+          nread += ret;
+        }
+        updateReadStatistics(readStatistics, nread, reader);
+        if (nread != len) {
+          throw new IOException("truncated return from reader.read(): " +
+              "excpected " + len + ", got " + nread);
         }
         DFSClientFaultInjector.get().readFromDatanodeDelay();
         return;
@@ -1248,30 +1278,12 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
   }
 
   /**
-   * This method verifies that the read portions are valid and do not overlap
-   * with each other.
-   */
-  private void checkReadPortions(int[] offsets, int[] lengths, int totalLen) {
-    Preconditions.checkArgument(offsets.length == lengths.length && offsets.length > 0);
-    int sum = 0;
-    for (int i = 0; i < lengths.length; i++) {
-      if (i > 0) {
-        int gap = offsets[i] - offsets[i - 1];
-        // make sure read portions do not overlap with each other
-        Preconditions.checkArgument(gap >= lengths[i - 1]);
-      }
-      sum += lengths[i];
-    }
-    Preconditions.checkArgument(sum == totalLen);
-  }
-
-  /**
    * Like {@link #fetchBlockByteRange}except we start up a second, parallel,
    * 'hedged' read if the first read is taking longer than configured amount of
    * time. We then wait on which ever read returns first.
    */
   private void hedgedFetchBlockByteRange(LocatedBlock block, long start,
-      long end, byte[] buf, int offset,
+      long end, ByteBuffer buf,
       Map<ExtendedBlock, Set<DatanodeInfo>> corruptedBlockMap)
       throws IOException {
     final DfsClientConf conf = dfsClient.getConf();
@@ -1293,7 +1305,9 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
         // chooseDataNode is a commitment. If no node, we go to
         // the NN to reget block locations. Only go here on first read.
         chosenNode = chooseDataNode(block, ignored);
-        bb = ByteBuffer.wrap(buf, offset, len);
+        ByteBuffer tmp = buf.duplicate();
+        tmp.limit(buf.position() + len);
+        bb = tmp.slice();
         Callable<ByteBuffer> getFromDataNodeCallable = getFromOneDataNode(
             chosenNode, block, start, end, bb,
             corruptedBlockMap, hedgedReadId++);
@@ -1330,7 +1344,8 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
           if (chosenNode == null) {
             chosenNode = chooseDataNode(block, ignored);
           }
-          bb = ByteBuffer.allocate(len);
+          bb = buf.isDirect() ? ByteBuffer.allocateDirect(len) :
+              ByteBuffer.allocate(len);
           Callable<ByteBuffer> getFromDataNodeCallable = getFromOneDataNode(
               chosenNode, block, start, end, bb,
               corruptedBlockMap, hedgedReadId++);
@@ -1349,13 +1364,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
           ByteBuffer result = getFirstToComplete(hedgedService, futures);
           // cancel the rest.
           cancelAll(futures);
-          if (result.array() != buf) { // compare the array pointers
-            dfsClient.getHedgedReadMetrics().incHedgedReadWins();
-            System.arraycopy(result.array(), result.position(), buf, offset,
-                len);
-          } else {
-            dfsClient.getHedgedReadMetrics().incHedgedReadOps();
+          if (result != buf) {
+            buf.put(result);
           }
+          dfsClient.getHedgedReadMetrics().incHedgedReadOps();
           return;
         } catch (InterruptedException ie) {
           // Ignore and retry
@@ -1452,13 +1464,14 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     TraceScope scope =
         dfsClient.getPathTraceScope("DFSInputStream#byteArrayPread", src);
     try {
-      return pread(position, buffer, offset, length);
+      ByteBuffer bb = ByteBuffer.wrap(buffer, offset, length);
+      return pread(position, bb);
     } finally {
       scope.close();
     }
   }
 
-  private int pread(long position, byte[] buffer, int offset, int length)
+  private int pread(long position, ByteBuffer buffer)
       throws IOException {
     // sanity checks
     dfsClient.checkOpen();
@@ -1470,6 +1483,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     if ((position < 0) || (position >= filelen)) {
       return -1;
     }
+    int length = buffer.remaining();
     int realLen = length;
     if ((position + length) > filelen) {
       realLen = (int)(filelen - position);
@@ -1483,14 +1497,19 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       = new HashMap<ExtendedBlock, Set<DatanodeInfo>>();
     for (LocatedBlock blk : blockRange) {
       long targetStart = position - blk.getStartOffset();
-      long bytesToRead = Math.min(remaining, blk.getBlockSize() - targetStart);
+      long targetEnd;
+      int bytesToRead = (int) Math.min(remaining,
+          blk.getBlockSize() - targetStart);
       try {
-        if (dfsClient.isHedgedReadsEnabled()) {
+        targetEnd = targetStart + bytesToRead - 1;
+        ByteBuffer dup = buffer.duplicate();
+        dup.limit(dup.position() + bytesToRead);
+        if (dfsClient.isHedgedReadsEnabled() && !blk.isStriped()) {
           hedgedFetchBlockByteRange(blk, targetStart,
-              targetStart + bytesToRead - 1, buffer, offset, corruptedBlockMap);
+              targetEnd, dup.slice(), corruptedBlockMap);
         } else {
-          fetchBlockByteRange(blk, targetStart, targetStart + bytesToRead - 1,
-              buffer, offset, corruptedBlockMap);
+          fetchBlockByteRange(blk, targetStart, targetEnd,
+              dup.slice(), corruptedBlockMap);
         }
       } finally {
         // Check and report if any block replicas are corrupted.
@@ -1501,7 +1520,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
 
       remaining -= bytesToRead;
       position += bytesToRead;
-      offset += bytesToRead;
+      buffer.position(buffer.position() + bytesToRead);
     }
     assert remaining == 0 : "Wrong number of bytes read.";
     if (dfsClient.stats != null) {
@@ -1628,9 +1647,6 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
    */
   @Override
   public synchronized boolean seekToNewSource(long targetPos) throws IOException {
-    if (currentNode == null) {
-      return seekToBlockSource(targetPos);
-    }
     boolean markedDead = deadNodes.containsKey(currentNode);
     addToDeadNodes(currentNode);
     DatanodeInfo oldNode = currentNode;

@@ -544,9 +544,7 @@ public class KMSClientProvider extends KeyProvider implements CryptoExtension,
       // AuthenticatedURL properly to set authToken post initialization)
     }
     HttpExceptionUtils.validateResponse(conn, expectedResponse);
-    if (conn.getContentType() != null
-        && conn.getContentType().trim().toLowerCase()
-            .startsWith(APPLICATION_JSON_MIME)
+    if (APPLICATION_JSON_MIME.equalsIgnoreCase(conn.getContentType())
         && klass != null) {
       ObjectMapper mapper = new ObjectMapper();
       InputStream is = null;

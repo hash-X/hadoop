@@ -147,11 +147,13 @@ public class FSDirAttrOp {
         fsd.checkPathAccess(pc, iip, FsAction.WRITE);
       }
 
+      final short[] blockRepls = new short[2]; // 0: old, 1: new
       final BlockInfo[] blocks = unprotectedSetReplication(fsd, src,
-                                                           replication);
+          replication, blockRepls);
       isFile = blocks != null;
       if (isFile) {
         fsd.getEditLog().logSetReplication(src, replication);
+        bm.setReplication(blockRepls[0], blockRepls[1], src, blocks);
       }
     } finally {
       fsd.writeUnlock();
@@ -196,29 +198,6 @@ public class FSDirAttrOp {
   static BlockStoragePolicy[] getStoragePolicies(BlockManager bm)
       throws IOException {
     return bm.getStoragePolicies();
-  }
-
-  static BlockStoragePolicy getStoragePolicy(FSDirectory fsd, BlockManager bm,
-      String path) throws IOException {
-    FSPermissionChecker pc = fsd.getPermissionChecker();
-    byte[][] pathComponents = FSDirectory
-        .getPathComponentsForReservedPath(path);
-    fsd.readLock();
-    try {
-      path = fsd.resolvePath(pc, path, pathComponents);
-      final INodesInPath iip = fsd.getINodesInPath(path, false);
-      if (fsd.isPermissionEnabled()) {
-        fsd.checkPathAccess(pc, iip, FsAction.READ);
-      }
-      INode inode = iip.getLastINode();
-      if (inode == null) {
-        throw new FileNotFoundException("File/Directory does not exist: "
-            + iip.getPath());
-      }
-      return bm.getStoragePolicy(inode.getStoragePolicyID());
-    } finally {
-      fsd.readUnlock();
-    }
   }
 
   static long getPreferredBlockSize(FSDirectory fsd, String src)
@@ -397,51 +376,44 @@ public class FSDirAttrOp {
   }
 
   static BlockInfo[] unprotectedSetReplication(
-      FSDirectory fsd, String src, short replication)
+      FSDirectory fsd, String src, short replication, short[] blockRepls)
       throws QuotaExceededException, UnresolvedLinkException,
-             SnapshotAccessControlException {
+      SnapshotAccessControlException, UnsupportedActionException {
     assert fsd.hasWriteLock();
 
-    final BlockManager bm = fsd.getBlockManager();
     final INodesInPath iip = fsd.getINodesInPath4Write(src, true);
     final INode inode = iip.getLastINode();
     if (inode == null || !inode.isFile()) {
       return null;
     }
     INodeFile file = inode.asFile();
+    if (file.isStriped()) {
+      throw new UnsupportedActionException(
+          "Cannot set replication to a file with striped blocks");
+    }
 
-    // Make sure the directory has sufficient quotas
-    short oldBR = file.getPreferredBlockReplication();
+    final short oldBR = file.getPreferredBlockReplication();
 
-    // Ensure the quota does not exceed
-    if (oldBR < replication) {
-      long size = file.computeFileSize(true, true);
-      fsd.updateCount(iip, 0L, size, oldBR, replication, true);
+    // before setFileReplication, check for increasing block replication.
+    // if replication > oldBR, then newBR == replication.
+    // if replication < oldBR, we don't know newBR yet.
+    if (replication > oldBR) {
+      long dsDelta = file.storagespaceConsumed(null).getStorageSpace() / oldBR;
+      fsd.updateCount(iip, 0L, dsDelta, oldBR, replication, true);
     }
 
     file.setFileReplication(replication, iip.getLatestSnapshotId());
-    short targetReplication = (short) Math.max(
-        replication, file.getPreferredBlockReplication());
 
-    for (BlockInfo b : file.getBlocks()) {
-      if (oldBR == targetReplication) {
-        continue;
-      }
-      if (oldBR > replication) {
-        fsd.updateCount(iip, 0L, b.getNumBytes(), oldBR, targetReplication,
-                        true);
-      }
-      bm.setReplication(oldBR, targetReplication, b);
+    final short newBR = file.getPreferredBlockReplication();
+    // check newBR < oldBR case.
+    if (newBR < oldBR) {
+      long dsDelta = file.storagespaceConsumed(null).getStorageSpace() / newBR;
+      fsd.updateCount(iip, 0L, dsDelta, oldBR, newBR, true);
     }
 
-    if (oldBR != -1) {
-      if (oldBR > targetReplication) {
-        FSDirectory.LOG.info("Decreasing replication from {} to {} for {}",
-                             oldBR, targetReplication, src);
-      } else {
-        FSDirectory.LOG.info("Increasing replication from {} to {} for {}",
-                             oldBR, targetReplication, src);
-      }
+    if (blockRepls != null) {
+      blockRepls[0] = oldBR;
+      blockRepls[1] = newBR;
     }
     return file.getBlocks();
   }
@@ -507,7 +479,8 @@ public class FSDirAttrOp {
 
       // if the last access time update was within the last precision interval, then
       // no need to store access time
-      if (atime <= inodeTime + fsd.getAccessTimePrecision() && !force) {
+      if (atime <= inodeTime + fsd.getFSNamesystem().getAccessTimePrecision()
+          && !force) {
         status =  false;
       } else {
         inode.setAccessTime(atime, latest);

@@ -18,7 +18,6 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import com.google.common.base.Preconditions;
-
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.StorageType;
@@ -29,7 +28,7 @@ import org.apache.hadoop.hdfs.protocol.SnapshotException;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
 
@@ -104,7 +103,7 @@ class FSDirConcatOp {
   private static INodeFile[] verifySrcFiles(FSDirectory fsd, String[] srcs,
       INodesInPath targetIIP, FSPermissionChecker pc) throws IOException {
     // to make sure no two files are the same
-    Set<INodeFile> si = new LinkedHashSet<>();
+    Set<INodeFile> si = new HashSet<>();
     final INodeFile targetINode = targetIIP.getLastINode().asFile();
     final INodeDirectory targetParent = targetINode.getParent();
     // now check the srcs
@@ -144,6 +143,7 @@ class FSDirConcatOp {
         throw new HadoopIllegalArgumentException("concat: source file " + src
             + " is invalid or empty or underConstruction");
       }
+
       // source file's preferred block size cannot be greater than the target
       // file
       if (srcINodeFile.getPreferredBlockSize() >
@@ -152,6 +152,11 @@ class FSDirConcatOp {
             + " has preferred block size " + srcINodeFile.getPreferredBlockSize()
             + " which is greater than the target file's preferred block size "
             + targetINode.getPreferredBlockSize());
+      }
+      // TODO currently we do not support concatenating EC files
+      if (srcINodeFile.isStriped()) {
+        throw new HadoopIllegalArgumentException("concat: the src file " + src
+            + " is with striped blocks");
       }
       si.add(srcINodeFile);
     }
@@ -170,7 +175,7 @@ class FSDirConcatOp {
     QuotaCounts deltas = new QuotaCounts.Builder().build();
     final short targetRepl = target.getPreferredBlockReplication();
     for (INodeFile src : srcList) {
-      short srcRepl = src.getFileReplication();
+      short srcRepl = src.getPreferredBlockReplication();
       long fileSize = src.computeFileSize();
       if (targetRepl != srcRepl) {
         deltas.addStorageSpace(fileSize * (targetRepl - srcRepl));
@@ -223,7 +228,7 @@ class FSDirConcatOp {
     // the target file can be included in a snapshot
     trgInode.recordModification(targetIIP.getLatestSnapshotId());
     INodeDirectory trgParent = targetIIP.getINode(-2).asDirectory();
-    trgInode.concatBlocks(srcList, fsd.getBlockManager());
+    trgInode.concatBlocks(srcList);
 
     // since we are in the same dir - we can use same parent to remove files
     int count = 0;

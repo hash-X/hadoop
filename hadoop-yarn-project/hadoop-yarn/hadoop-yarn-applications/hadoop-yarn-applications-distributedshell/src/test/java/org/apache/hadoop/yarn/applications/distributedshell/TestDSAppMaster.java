@@ -41,7 +41,6 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -52,14 +51,11 @@ public class TestDSAppMaster {
 
   static class TestAppMaster extends ApplicationMaster {
     private int threadsLaunched = 0;
-    public List<String> yarnShellIds = new ArrayList<String>();
 
     @Override
-    protected Thread createLaunchContainerThread(Container allocatedContainer,
-        String shellId) {
+    protected Thread createLaunchContainerThread(Container allocatedContainer) {
       threadsLaunched++;
       launchedContainers.add(allocatedContainer.getId());
-      yarnShellIds.add(shellId);
       return new Thread();
     }
 
@@ -105,8 +101,6 @@ public class TestDSAppMaster {
     Mockito.verifyZeroInteractions(mockClient);
     Assert.assertEquals("Incorrect number of threads launched", 1,
         master.threadsLaunched);
-    Assert.assertEquals("Incorrect YARN Shell IDs",
-        Arrays.asList("1"), master.yarnShellIds);
 
     // now send 3 extra containers
     containers.clear();
@@ -122,9 +116,6 @@ public class TestDSAppMaster {
 
     Assert.assertEquals("Incorrect number of threads launched", 4,
         master.threadsLaunched);
-
-    Assert.assertEquals("Incorrect YARN Shell IDs",
-        Arrays.asList("1", "2", "3", "4"), master.yarnShellIds);
 
     // make sure we handle completion events correctly
     List<ContainerStatus> status = new ArrayList<>();

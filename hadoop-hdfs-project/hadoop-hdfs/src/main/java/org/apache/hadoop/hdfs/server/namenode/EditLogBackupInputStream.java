@@ -119,7 +119,7 @@ class EditLogBackupInputStream extends EditLogInputStream {
 
     this.version = version;
 
-    reader = FSEditLogOp.Reader.create(in, tracker, version);
+    reader = new FSEditLogOp.Reader(in, tracker, version);
   }
 
   void clear() throws IOException {

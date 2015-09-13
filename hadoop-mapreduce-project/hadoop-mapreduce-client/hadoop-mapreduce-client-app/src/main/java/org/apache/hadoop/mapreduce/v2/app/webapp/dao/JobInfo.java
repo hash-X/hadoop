@@ -51,7 +51,6 @@ public class JobInfo {
   protected String id;
   protected String name;
   protected String user;
-  protected String queue;
   protected JobState state;
   protected int mapsTotal;
   protected int mapsCompleted;
@@ -98,7 +97,6 @@ public class JobInfo {
     }
     this.name = job.getName().toString();
     this.user = job.getUserName();
-    this.queue = job.getQueueName();
     this.state = job.getState();
     this.mapsTotal = job.getTotalMaps();
     this.mapsCompleted = job.getCompletedMaps();
@@ -223,10 +221,6 @@ public class JobInfo {
 
   public String getName() {
     return this.name;
-  }
-
-  public String getQueueName() {
-    return this.queue;
   }
 
   public String getId() {

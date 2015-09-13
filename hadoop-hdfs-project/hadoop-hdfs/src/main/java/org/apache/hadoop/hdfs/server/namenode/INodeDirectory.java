@@ -43,6 +43,7 @@ import org.apache.hadoop.hdfs.util.ReadOnlyList;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 
 import static org.apache.hadoop.hdfs.protocol.HdfsConstants.BLOCK_STORAGE_POLICY_ID_UNSPECIFIED;
 
@@ -117,10 +118,12 @@ public class INodeDirectory extends INodeWithAdditionalFields
   @Override
   public byte getLocalStoragePolicyID() {
     XAttrFeature f = getXAttrFeature();
-    XAttr xattr = f == null ? null : f.getXAttr(
-        BlockStoragePolicySuite.getStoragePolicyXAttrPrefixedName());
-    if (xattr != null) {
-      return (xattr.getValue())[0];
+    ImmutableList<XAttr> xattrs = f == null ? ImmutableList.<XAttr> of() : f
+        .getXAttrs();
+    for (XAttr xattr : xattrs) {
+      if (BlockStoragePolicySuite.isStoragePolicyXAttr(xattr)) {
+        return (xattr.getValue())[0];
+      }
     }
     return BLOCK_STORAGE_POLICY_ID_UNSPECIFIED;
   }
@@ -660,7 +663,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
         continue;
       }
       // The locks were released and reacquired. Check parent first.
-      if (!isRoot() && getParent() == null) {
+      if (getParent() == null) {
         // Stop further counting and return whatever we have so far.
         break;
       }

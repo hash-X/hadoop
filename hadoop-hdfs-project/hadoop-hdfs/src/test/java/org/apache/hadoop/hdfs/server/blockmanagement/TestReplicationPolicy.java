@@ -100,16 +100,6 @@ public class TestReplicationPolicy {
         dnCacheCapacity, dnCacheUsed, xceiverCount, volFailures, null);
   }
 
-  private static void updateHeartbeatForExtraStorage(long capacity,
-      long dfsUsed, long remaining, long blockPoolUsed) {
-    DatanodeDescriptor dn = dataNodes[5];
-    dn.getStorageInfos()[1].setUtilizationForTesting(
-        capacity, dfsUsed, remaining, blockPoolUsed);
-    dn.updateHeartbeat(
-        BlockManagerTestUtil.getStorageReportsForDatanode(dn),
-        0L, 0L, 0, 0, null);
-  }
-
   @BeforeClass
   public static void setupCluster() throws Exception {
     Configuration conf = new HdfsConfiguration();
@@ -122,16 +112,6 @@ public class TestReplicationPolicy {
         "/d2/r3"};
     storages = DFSTestUtil.createDatanodeStorageInfos(racks);
     dataNodes = DFSTestUtil.toDatanodeDescriptor(storages);
-
-    // create an extra storage for dn5.
-    DatanodeStorage extraStorage = new DatanodeStorage(
-        storages[5].getStorageID() + "-extra", DatanodeStorage.State.NORMAL,
-        StorageType.DEFAULT);
-/*    DatanodeStorageInfo si = new DatanodeStorageInfo(
-        storages[5].getDatanodeDescriptor(), extraStorage);
-*/
-    BlockManagerTestUtil.updateStorage(storages[5].getDatanodeDescriptor(),
-        extraStorage);
 
     FileSystem.setDefaultUri(conf, "hdfs://localhost:0");
     conf.set(DFSConfigKeys.DFS_NAMENODE_HTTP_ADDRESS_KEY, "0.0.0.0:0");
@@ -155,17 +135,11 @@ public class TestReplicationPolicy {
       bm.getDatanodeManager().getHeartbeatManager().addDatanode(
           dataNodes[i]);
     }
-    resetHeartbeatForStorages();
-  }
-
-  private static void resetHeartbeatForStorages() {
     for (int i=0; i < NUM_OF_DATANODES; i++) {
       updateHeartbeatWithUsage(dataNodes[i],
           2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
           2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L, 0L, 0L, 0, 0);
-    }
-    // No available space in the extra storage of dn0
-    updateHeartbeatForExtraStorage(0L, 0L, 0L, 0L);
+    }    
   }
 
   private static boolean isOnSameRack(DatanodeStorageInfo left, DatanodeStorageInfo right) {
@@ -175,55 +149,6 @@ public class TestReplicationPolicy {
   private static boolean isOnSameRack(DatanodeStorageInfo left, DatanodeDescriptor right) {
     return cluster.isOnSameRack(left.getDatanodeDescriptor(), right);
   }
-
-  /**
-   * Test whether the remaining space per storage is individually
-   * considered.
-   */
-  @Test
-  public void testChooseNodeWithMultipleStorages1() throws Exception {
-    updateHeartbeatWithUsage(dataNodes[5],
-        2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
-        (2*HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE)/3, 0L,
-        0L, 0L, 0, 0);
-
-    updateHeartbeatForExtraStorage(
-        2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
-        (2*HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE)/3, 0L);
-
-    DatanodeStorageInfo[] targets;
-    targets = chooseTarget (1, dataNodes[5],
-        new ArrayList<DatanodeStorageInfo>(), null);
-    assertEquals(1, targets.length);
-    assertEquals(storages[4], targets[0]);
-
-    resetHeartbeatForStorages();
-  }
-
-  /**
-   * Test whether all storages on the datanode are considered while
-   * choosing target to place block.
-   */
-  @Test
-  public void testChooseNodeWithMultipleStorages2() throws Exception {
-    updateHeartbeatWithUsage(dataNodes[5],
-        2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
-        (2*HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE)/3, 0L,
-        0L, 0L, 0, 0);
-
-    updateHeartbeatForExtraStorage(
-        2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
-        HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L);
-
-    DatanodeStorageInfo[] targets;
-    targets = chooseTarget (1, dataNodes[5],
-        new ArrayList<DatanodeStorageInfo>(), null);
-    assertEquals(1, targets.length);
-    assertEquals(dataNodes[5], targets[0].getDatanodeDescriptor());
-
-    resetHeartbeatForStorages();
-  }
-
   /**
    * In this testcase, client is dataNodes[0]. So the 1st replica should be
    * placed on dataNodes[0], the 2nd replica should be placed on 
@@ -265,8 +190,10 @@ public class TestReplicationPolicy {
     assertTrue(isOnSameRack(targets[1], targets[2]) ||
                isOnSameRack(targets[2], targets[3]));
     assertFalse(isOnSameRack(targets[0], targets[2]));
-
-    resetHeartbeatForStorages();
+    
+    updateHeartbeatWithUsage(dataNodes[0],
+        2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
+        HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L, 0L, 0L, 0, 0);
   }
 
   private static DatanodeStorageInfo[] chooseTarget(int numOfReplicas) {
@@ -421,7 +348,9 @@ public class TestReplicationPolicy {
                isOnSameRack(targets[2], targets[3]));
     assertFalse(isOnSameRack(targets[1], targets[3]));
 
-    resetHeartbeatForStorages();
+    updateHeartbeatWithUsage(dataNodes[0],
+        2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
+        HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L, 0L, 0L, 0, 0);
   }
   
   /**
@@ -462,8 +391,12 @@ public class TestReplicationPolicy {
     assertTrue(isOnSameRack(targets[0], targets[1]) ||
                isOnSameRack(targets[1], targets[2]));
     assertFalse(isOnSameRack(targets[0], targets[2]));
-
-    resetHeartbeatForStorages();
+    
+    for(int i=0; i<2; i++) {
+      updateHeartbeatWithUsage(dataNodes[i],
+          2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
+          HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L, 0L, 0L, 0, 0);
+    }
   }
 
   /**
@@ -541,7 +474,6 @@ public class TestReplicationPolicy {
     } finally {
       bm.getDatanodeManager().getNetworkTopology().remove(newDn);
     }
-    resetHeartbeatForStorages();
   }
 
 
@@ -595,8 +527,12 @@ public class TestReplicationPolicy {
     // Suppose to place replicas on each node but two data nodes are not
     // available for placing replica, so here we expect a short of 2
     assertTrue(((String)lastLogEntry.getMessage()).contains("in need of 2"));
-
-    resetHeartbeatForStorages();
+    
+    for(int i=0; i<2; i++) {
+      updateHeartbeatWithUsage(dataNodes[i],
+          2* HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L,
+          HdfsServerConstants.MIN_BLOCKS_FOR_WRITE*BLOCK_SIZE, 0L, 0L, 0L, 0, 0);
+    }
   }
 
   private boolean containsWithinRange(DatanodeStorageInfo target,
@@ -898,7 +834,7 @@ public class TestReplicationPolicy {
   private BlockInfo genBlockInfo(long id) {
     return new BlockInfoContiguous(new Block(id), (short) 3);
   }
-
+  
   /**
    * Test for the high priority blocks are processed before the low priority
    * blocks.
@@ -1221,8 +1157,8 @@ public class TestReplicationPolicy {
   public void testAddStoredBlockDoesNotCauseSkippedReplication()
       throws IOException {
     Namesystem mockNS = mock(Namesystem.class);
+    when(mockNS.isPopulatingReplQueues()).thenReturn(true);
     when(mockNS.hasWriteLock()).thenReturn(true);
-    when(mockNS.hasReadLock()).thenReturn(true);
     BlockManager bm = new BlockManager(mockNS, new HdfsConfiguration());
     UnderReplicatedBlocks underReplicatedBlocks = bm.neededReplications;
 
@@ -1246,11 +1182,9 @@ public class TestReplicationPolicy {
     // block under construction, the BlockManager will realize the expected
     // replication has been achieved and remove it from the under-replicated
     // queue.
-    BlockInfoContiguous info = new BlockInfoContiguous(block1, (short) 1);
-    info.convertToBlockUnderConstruction(BlockUCState.UNDER_CONSTRUCTION, null);
+    BlockInfoUnderConstructionContiguous info = new BlockInfoUnderConstructionContiguous(block1, (short) 1);
     BlockCollection bc = mock(BlockCollection.class);
-    when(bc.getId()).thenReturn(1000L);
-    when(mockNS.getBlockCollection(1000L)).thenReturn(bc);
+    when(bc.getPreferredBlockReplication()).thenReturn((short)1);
     bm.addBlockCollection(info, bc);
 
     // Adding this block will increase its current replication, and that will
@@ -1270,13 +1204,21 @@ public class TestReplicationPolicy {
       testConvertLastBlockToUnderConstructionDoesNotCauseSkippedReplication()
           throws IOException {
     Namesystem mockNS = mock(Namesystem.class);
-    when(mockNS.hasReadLock()).thenReturn(true);
-
+    when(mockNS.isPopulatingReplQueues()).thenReturn(true);
     BlockManager bm = new BlockManager(mockNS, new HdfsConfiguration());
     UnderReplicatedBlocks underReplicatedBlocks = bm.neededReplications;
 
-    BlockInfo block1 = genBlockInfo(ThreadLocalRandom.current().nextLong());
-    BlockInfo block2 = genBlockInfo(ThreadLocalRandom.current().nextLong());
+    long blkID1 = ThreadLocalRandom.current().nextLong();
+    if (blkID1 < 0) {
+      blkID1 *= -1;
+    }
+    long blkID2 = ThreadLocalRandom.current().nextLong();
+    if (blkID2 < 0) {
+      blkID2 *= -1;
+    }
+
+    BlockInfo block1 = genBlockInfo(blkID1);
+    BlockInfo block2 = genBlockInfo(blkID2);
 
     // Adding QUEUE_UNDER_REPLICATED block
     underReplicatedBlocks.add(block1, 0, 1, 1);
@@ -1291,33 +1233,35 @@ public class TestReplicationPolicy {
     chosenBlocks = underReplicatedBlocks.chooseUnderReplicatedBlocks(1);
     assertTheChosenBlocks(chosenBlocks, 1, 0, 0, 0, 0);
 
-    final BlockInfo info = new BlockInfoContiguous(block1, (short) 1);
+    final BlockInfoContiguous info = new BlockInfoContiguous(block1, (short) 1);
     final BlockCollection mbc = mock(BlockCollection.class);
-    when(mbc.getId()).thenReturn(1000L);
     when(mbc.getLastBlock()).thenReturn(info);
     when(mbc.getPreferredBlockSize()).thenReturn(block1.getNumBytes() + 1);
+    when(mbc.getPreferredBlockReplication()).thenReturn((short)1);
     when(mbc.isUnderConstruction()).thenReturn(true);
     ContentSummary cs = mock(ContentSummary.class);
     when(cs.getLength()).thenReturn((long)1);
     when(mbc.computeContentSummary(bm.getStoragePolicySuite())).thenReturn(cs);
-    info.setBlockCollectionId(1000);
+    info.setBlockCollection(mbc);
     bm.addBlockCollection(info, mbc);
 
     DatanodeStorageInfo[] storageAry = {new DatanodeStorageInfo(
         dataNodes[0], new DatanodeStorage("s1"))};
-    info.convertToBlockUnderConstruction(BlockUCState.UNDER_CONSTRUCTION,
-        storageAry);
+    final BlockInfoUnderConstructionContiguous ucBlock =
+        info.convertToBlockUnderConstruction(BlockUCState.UNDER_CONSTRUCTION,
+            storageAry);
     DatanodeStorageInfo storage = mock(DatanodeStorageInfo.class);
     DatanodeDescriptor dn = mock(DatanodeDescriptor.class);
     when(dn.isDecommissioned()).thenReturn(true);
     when(storage.getState()).thenReturn(DatanodeStorage.State.NORMAL);
     when(storage.getDatanodeDescriptor()).thenReturn(dn);
-    when(storage.removeBlock(any(BlockInfo.class))).thenReturn(true);
-    when(storage.addBlock(any(BlockInfo.class))).thenReturn
+    when(storage.removeBlock(any(BlockInfoContiguous.class))).thenReturn(true);
+    when(storage.addBlock(any(BlockInfoContiguous.class))).thenReturn
         (DatanodeStorageInfo.AddBlockResult.ADDED);
-    info.addStorage(storage);
+    ucBlock.addStorage(storage, ucBlock);
 
-    when(mbc.getLastBlock()).thenReturn(info);
+    BlockInfo lastBlk = mbc.getLastBlock();
+    when(mbc.getLastBlock()).thenReturn(lastBlk, ucBlock);
 
     bm.convertLastBlockToUnderConstruction(mbc, 0L);
 
@@ -1332,8 +1276,7 @@ public class TestReplicationPolicy {
   public void testupdateNeededReplicationsDoesNotCauseSkippedReplication()
       throws IOException {
     Namesystem mockNS = mock(Namesystem.class);
-    when(mockNS.hasReadLock()).thenReturn(true);
-
+    when(mockNS.isPopulatingReplQueues()).thenReturn(true);
     BlockManager bm = new BlockManager(mockNS, new HdfsConfiguration());
     UnderReplicatedBlocks underReplicatedBlocks = bm.neededReplications;
 
@@ -1353,7 +1296,7 @@ public class TestReplicationPolicy {
     chosenBlocks = underReplicatedBlocks.chooseUnderReplicatedBlocks(1);
     assertTheChosenBlocks(chosenBlocks, 1, 0, 0, 0, 0);
 
-    bm.setReplication((short)0, (short)1, block1);
+    bm.setReplication((short)0, (short)1, "", (BlockInfoContiguous) block1);
 
     // Choose 1 block from UnderReplicatedBlocks. Then it should pick 1 block
     // from QUEUE_VERY_UNDER_REPLICATED.

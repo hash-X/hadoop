@@ -46,13 +46,9 @@ public enum NodeState {
   REBOOTED,
 
   /** Node decommission is in progress */
-  DECOMMISSIONING,
-
-  /** Node has shutdown gracefully. */
-  SHUTDOWN;
-
+  DECOMMISSIONING;
+  
   public boolean isUnusable() {
-    return (this == UNHEALTHY || this == DECOMMISSIONED
-        || this == LOST || this == SHUTDOWN);
+    return (this == UNHEALTHY || this == DECOMMISSIONED || this == LOST);
   }
 }

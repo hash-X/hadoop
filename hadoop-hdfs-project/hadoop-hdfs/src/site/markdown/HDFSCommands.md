@@ -71,15 +71,9 @@ Commands useful for users of a hadoop cluster.
 
 ### `classpath`
 
-Usage: `hdfs classpath [--glob |--jar <path> |-h |--help]`
+Usage: `hdfs classpath`
 
-| COMMAND\_OPTION | Description |
-|:---- |:---- |
-| `--glob` | expand wildcards |
-| `--jar` *path* | write classpath as manifest in jar named *path* |
-| `-h`, `--help` | print help |
-
-Prints the class path needed to get the Hadoop jar and the required libraries. If called without arguments, then prints the classpath set up by the command scripts, which is likely to contain wildcards in the classpath entries. Additional options print the classpath after wildcard expansion or write the classpath into the manifest of a jar file. The latter is useful in environments where wildcards cannot be used and the expanded classpath exceeds the maximum supported command line length.
+Prints the class path needed to get the Hadoop jar and the required libraries
 
 ### `dfs`
 
@@ -89,16 +83,12 @@ Run a filesystem command on the file system supported in Hadoop. The various COM
 
 ### `fetchdt`
 
-Usage: `hdfs fetchdt <opts> <token_file_path> `
+Usage: `hdfs fetchdt [--webservice <namenode_http_addr>] <path> `
 
 | COMMAND\_OPTION | Description |
 |:---- |:---- |
-| `--webservice` *NN_Url* | Url to contact NN on (starts with http or https)|
-| `--renewer` *name* | Name of the delegation token renewer |
-| `--cancel` | Cancel the delegation token |
-| `--renew` | Renew the delegation token.  Delegation token must have been fetched using the --renewer *name* option.|
-| `--print` | Print the delegation token |
-| *token_file_path* | File path to store the token into. |
+| `--webservice` *https\_address* | use http protocol instead of RPC |
+| *fileName* | File name to store the token into. |
 
 Gets Delegation Token from a NameNode. See [fetchdt](./HdfsUserGuide.html#fetchdt) for more info.
 
@@ -109,9 +99,8 @@ Usage:
        hdfs fsck <path>
               [-list-corruptfileblocks |
               [-move | -delete | -openforwrite]
-              [-files [-blocks [-locations | -racks | -replicaDetails]]]
+              [-files [-blocks [-locations | -racks]]]
               [-includeSnapshots] [-showprogress]
-              [-storagepolicies] [-blockId <blk_Id>]
 
 | COMMAND\_OPTION | Description |
 |:---- |:---- |
@@ -121,14 +110,11 @@ Usage:
 | `-files` `-blocks` | Print out the block report |
 | `-files` `-blocks` `-locations` | Print out locations for every block. |
 | `-files` `-blocks` `-racks` | Print out network topology for data-node locations. |
-| `-files` `-blocks` `-replicaDetails` | Print out each replica details. |
 | `-includeSnapshots` | Include snapshot data if the given path indicates a snapshottable directory or there are snapshottable directories under it. |
 | `-list-corruptfileblocks` | Print out list of missing blocks and files they belong to. |
 | `-move` | Move corrupted files to /lost+found. |
 | `-openforwrite` | Print out files opened for write. |
 | `-showprogress` | Print out dots for progress in output. Default is OFF (no progress). |
-| `-storagepolicies` | Print out storage policy summary for the blocks. |
-| `-blockId` | Print out information about the block. |
 
 Runs the HDFS filesystem checking utility. See [fsck](./HdfsUserGuide.html#fsck) for more info.
 
@@ -266,7 +252,6 @@ Usage:
               [-policy <policy>]
               [-exclude [-f <hosts-file> | <comma-separated list of hosts>]]
               [-include [-f <hosts-file> | <comma-separated list of hosts>]]
-              [-blockpools <comma-separated list of blockpool ids>]
               [-idleiterations <idleiterations>]
 
 | COMMAND\_OPTION | Description |
@@ -275,7 +260,6 @@ Usage:
 | `-threshold` \<threshold\> | Percentage of disk capacity. This overwrites the default threshold. |
 | `-exclude -f` \<hosts-file\> \| \<comma-separated list of hosts\> | Excludes the specified datanodes from being balanced by the balancer. |
 | `-include -f` \<hosts-file\> \| \<comma-separated list of hosts\> | Includes only the specified datanodes to be balanced by the balancer. |
-| `-blockpools` \<comma-separated list of blockpool ids\> | The balancer will only run on blockpools included in this list. |
 | `-idleiterations` \<iterations\> | Maximum number of idle iterations before exit. This overwrites the default idleiterations(5). |
 
 Runs a cluster balancing utility. An administrator can simply press Ctrl-C to stop the rebalancing process. See [Balancer](./HdfsUserGuide.html#Balancer) for more details.
@@ -300,7 +284,7 @@ See the [HDFS Transparent Encryption Documentation](./TransparentEncryption.html
 
 ### `datanode`
 
-Usage: `hdfs datanode [-regular | -rollback | -rollingupgrade rollback]`
+Usage: `hdfs datanode [-regular | -rollback | -rollingupgrace rollback]`
 
 | COMMAND\_OPTION | Description |
 |:---- |:---- |
@@ -338,7 +322,6 @@ Usage:
               [-refreshNamenodes datanodehost:port]
               [-deleteBlockPool datanode-host:port blockpoolId [force]]
               [-setBalancerBandwidth <bandwidth in bytes per second>]
-              [-getBalancerBandwidth <datanode_host:ipc_port>]
               [-allowSnapshot <snapshotDir>]
               [-disallowSnapshot <snapshotDir>]
               [-fetchImage <local directory>]
@@ -349,7 +332,7 @@ Usage:
 
 | COMMAND\_OPTION | Description |
 |:---- |:---- |
-| `-report` `[-live]` `[-dead]` `[-decommissioning]` | Reports basic filesystem information and statistics, The dfs usage can be different from "du" usage, because it measures raw space used by replication, checksums, snapshots and etc. on all the DNs. Optional flags may be used to filter the list of displayed DataNodes. |
+| `-report` `[-live]` `[-dead]` `[-decommissioning]` | Reports basic filesystem information and statistics. Optional flags may be used to filter the list of displayed DataNodes. |
 | `-safemode` enter\|leave\|get\|wait | Safe mode maintenance command. Safe mode is a Namenode state in which it <br/>1. does not accept changes to the name space (read-only) <br/>2. does not replicate or delete blocks. <br/>Safe mode is entered automatically at Namenode startup, and leaves safe mode automatically when the configured minimum percentage of blocks satisfies the minimum replication condition. Safe mode can also be entered manually, but then it can only be turned off manually as well. |
 | `-saveNamespace` | Save current namespace into storage directories and reset edits log. Requires safe mode. |
 | `-rollEdits` | Rolls the edit log on the active NameNode. |
@@ -371,8 +354,7 @@ Usage:
 | `-printTopology` | Print a tree of the racks and their nodes as reported by the Namenode |
 | `-refreshNamenodes` datanodehost:port | For the given datanode, reloads the configuration files, stops serving the removed block-pools and starts serving new block-pools. |
 | `-deleteBlockPool` datanode-host:port blockpoolId [force] | If force is passed, block pool directory for the given blockpool id on the given datanode is deleted along with its contents, otherwise the directory is deleted only if it is empty. The command will fail if datanode is still serving the block pool. Refer to refreshNamenodes to shutdown a block pool service on a datanode. |
-| `-setBalancerBandwidth` \<bandwidth in bytes per second\> | Changes the network bandwidth used by each datanode during HDFS block balancing. \<bandwidth\> is the maximum number of bytes per second that will be used by each datanode. This value overrides the dfs.balance.bandwidthPerSec parameter. NOTE: The new value is not persistent on the DataNode. |
-| `-getBalancerBandwidth` \<datanode\_host:ipc\_port\> | Get the network bandwidth(in bytes per second) for the given datanode. This is the maximum network bandwidth used by the datanode during HDFS block balancing.|
+| `-setBalancerBandwidth` \<bandwidth in bytes per second\> | Changes the network bandwidth used by each datanode during HDFS block balancing. \<bandwidth\> is the maximum number of bytes per second that will be used by each datanode. This value overrides the dfs.balance.bandwidthPerSec parameter. NOTE: The new value is not persistent on the DataNode. |
 | `-allowSnapshot` \<snapshotDir\> | Allowing snapshots of a directory to be created. If the operation completes successfully, the directory becomes snapshottable. See the [HDFS Snapshot Documentation](./HdfsSnapshots.html) for more information. |
 | `-disallowSnapshot` \<snapshotDir\> | Disallowing snapshots of a directory to be created. All snapshots of the directory must be deleted before disallowing snapshots. See the [HDFS Snapshot Documentation](./HdfsSnapshots.html) for more information. |
 | `-fetchImage` \<local directory\> | Downloads the most recent fsimage from the NameNode and saves it in the specified local directory. |
@@ -505,7 +487,7 @@ Useful commands to help administrators debug HDFS issues, like validating block 
 
 ### `verify`
 
-Usage: `hdfs debug verify [-meta <metadata-file>] [-block <block-file>]`
+Usage: `hdfs dfs verify [-meta <metadata-file>] [-block <block-file>]`
 
 | COMMAND\_OPTION | Description |
 |:---- |:---- |
@@ -516,7 +498,7 @@ Verify HDFS metadata and block files. If a block file is specified, we will veri
 
 ### `recoverLease`
 
-Usage: `hdfs debug recoverLease [-path <path>] [-retries <num-retries>]`
+Usage: `hdfs dfs recoverLease [-path <path>] [-retries <num-retries>]`
 
 | COMMAND\_OPTION | Description |
 |:---- |:---- |

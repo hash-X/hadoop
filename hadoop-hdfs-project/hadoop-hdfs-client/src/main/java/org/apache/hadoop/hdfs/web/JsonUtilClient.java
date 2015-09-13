@@ -132,7 +132,7 @@ class JsonUtilClient {
         blockSize, mTime, aTime, permission, owner, group,
         symlink, DFSUtilClient.string2Bytes(localName),
         fileId, childrenNum, null,
-        storagePolicy);
+        storagePolicy, null);
   }
 
   /** Convert a Json map to an ExtendedBlock object. */
@@ -389,16 +389,6 @@ class JsonUtilClient {
     return aclStatusBuilder.build();
   }
 
-  static String getPath(final Map<?, ?> json)
-      throws IOException {
-    if (json == null) {
-      return null;
-    }
-
-    String path = (String) json.get("Path");
-    return path;
-  }
-
   static byte[] getXAttr(final Map<?, ?> json, final String name)
       throws IOException {
     if (json == null) {
@@ -408,20 +398,6 @@ class JsonUtilClient {
     Map<String, byte[]> xAttrs = toXAttrs(json);
     if (xAttrs != null) {
       return xAttrs.get(name);
-    }
-
-    return null;
-  }
-
-  /** Expecting only single XAttr in the map. return its value */
-  static byte[] getXAttr(final Map<?, ?> json) throws IOException {
-    if (json == null) {
-      return null;
-    }
-
-    Map<String, byte[]> xAttrs = toXAttrs(json);
-    if (xAttrs != null && !xAttrs.values().isEmpty()) {
-      return xAttrs.values().iterator().next();
     }
 
     return null;
@@ -503,7 +479,7 @@ class JsonUtilClient {
         (Map<?, ?>) m.get("lastLocatedBlock"));
     final boolean isLastBlockComplete = (Boolean)m.get("isLastBlockComplete");
     return new LocatedBlocks(fileLength, isUnderConstruction, locatedBlocks,
-        lastLocatedBlock, isLastBlockComplete, null);
+        lastLocatedBlock, isLastBlockComplete, null, null);
   }
 
 }

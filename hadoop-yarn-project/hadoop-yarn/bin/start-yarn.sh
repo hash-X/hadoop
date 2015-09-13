@@ -16,14 +16,13 @@
 # limitations under the License.
 
 
-MYNAME="${BASH_SOURCE-$0}"
-
 function hadoop_usage
 {
-  hadoop_generate_usage "${MYNAME}" false
+  echo "Usage: start-yarn.sh [--config confdir]"
 }
 
-bin=$(cd -P -- "$(dirname -- "${MYNAME}")" >/dev/null && pwd -P)
+this="${BASH_SOURCE-$0}"
+bin=$(cd -P -- "$(dirname -- "${this}")" >/dev/null && pwd -P)
 
 # let's locate libexec...
 if [[ -n "${HADOOP_PREFIX}" ]]; then

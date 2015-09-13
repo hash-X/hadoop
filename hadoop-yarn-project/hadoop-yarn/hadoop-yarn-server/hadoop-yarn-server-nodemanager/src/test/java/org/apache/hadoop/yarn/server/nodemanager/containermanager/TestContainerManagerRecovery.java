@@ -394,7 +394,8 @@ public class TestContainerManagerRecovery {
 
     return new ContainerManagerImpl(context,
         mock(ContainerExecutor.class), mock(DeletionService.class),
-        mock(NodeStatusUpdater.class), metrics, null) {
+        mock(NodeStatusUpdater.class), metrics,
+        context.getApplicationACLsManager(), null) {
           @Override
           protected LogHandler createLogHandler(Configuration conf,
               Context context, DeletionService deletionService) {

@@ -182,8 +182,6 @@ public class ApplicationMaster {
     DS_APP_ATTEMPT, DS_CONTAINER
   }
 
-  private static final String YARN_SHELL_ID = "YARN_SHELL_ID";
-
   // Configuration
   private Configuration conf;
 
@@ -280,8 +278,6 @@ public class ApplicationMaster {
 
   private final String linux_bash_command = "bash";
   private final String windows_command = "cmd /c";
-
-  private int yarnShellIdCounter = 1;
 
   @VisibleForTesting
   protected final Set<ContainerId> launchedContainers =
@@ -807,11 +803,8 @@ public class ApplicationMaster {
           + allocatedContainers.size());
       numAllocatedContainers.addAndGet(allocatedContainers.size());
       for (Container allocatedContainer : allocatedContainers) {
-        String yarnShellId = Integer.toString(yarnShellIdCounter);
-        yarnShellIdCounter++;
         LOG.info("Launching shell command on a new container."
             + ", containerId=" + allocatedContainer.getId()
-            + ", yarnShellId=" + yarnShellId
             + ", containerNode=" + allocatedContainer.getNodeId().getHost()
             + ":" + allocatedContainer.getNodeId().getPort()
             + ", containerNodeURI=" + allocatedContainer.getNodeHttpAddress()
@@ -822,8 +815,7 @@ public class ApplicationMaster {
         // + ", containerToken"
         // +allocatedContainer.getContainerToken().getIdentifier().toString());
 
-        Thread launchThread = createLaunchContainerThread(allocatedContainer,
-            yarnShellId);
+        Thread launchThread = createLaunchContainerThread(allocatedContainer);
 
         // launch and start the container on a separate thread to keep
         // the main thread unblocked
@@ -935,8 +927,7 @@ public class ApplicationMaster {
   private class LaunchContainerRunnable implements Runnable {
 
     // Allocated container
-    private Container container;
-    private String shellId;
+    Container container;
 
     NMCallbackHandler containerListener;
 
@@ -944,11 +935,10 @@ public class ApplicationMaster {
      * @param lcontainer Allocated container
      * @param containerListener Callback handler of the container
      */
-    public LaunchContainerRunnable(Container lcontainer,
-        NMCallbackHandler containerListener, String shellId) {
+    public LaunchContainerRunnable(
+        Container lcontainer, NMCallbackHandler containerListener) {
       this.container = lcontainer;
       this.containerListener = containerListener;
-      this.shellId = shellId;
     }
 
     @Override
@@ -959,7 +949,7 @@ public class ApplicationMaster {
      */
     public void run() {
       LOG.info("Setting up container launch container for containerid="
-          + container.getId() + " with shellid=" + shellId);
+          + container.getId());
 
       // Set the local resources
       Map<String, LocalResource> localResources = new HashMap<String, LocalResource>();
@@ -1048,11 +1038,8 @@ public class ApplicationMaster {
       // download anyfiles in the distributed file-system. The tokens are
       // otherwise also useful in cases, for e.g., when one is running a
       // "hadoop dfs" command inside the distributed shell.
-      Map<String, String> myShellEnv = new HashMap<String, String>(shellEnv);
-      myShellEnv.put(YARN_SHELL_ID, shellId);
       ContainerLaunchContext ctx = ContainerLaunchContext.newInstance(
-        localResources, myShellEnv, commands, null, allTokens.duplicate(),
-          null);
+        localResources, shellEnv, commands, null, allTokens.duplicate(), null);
       containerListener.addContainer(container.getId(), container);
       nmClientAsync.startContainerAsync(container, ctx);
     }
@@ -1202,11 +1189,9 @@ public class ApplicationMaster {
   }
 
   @VisibleForTesting
-  Thread createLaunchContainerThread(Container allocatedContainer,
-      String shellId) {
+  Thread createLaunchContainerThread(Container allocatedContainer) {
     LaunchContainerRunnable runnableLaunchContainer =
-        new LaunchContainerRunnable(allocatedContainer, containerListener,
-            shellId);
+        new LaunchContainerRunnable(allocatedContainer, containerListener);
     return new Thread(runnableLaunchContainer);
   }
 }

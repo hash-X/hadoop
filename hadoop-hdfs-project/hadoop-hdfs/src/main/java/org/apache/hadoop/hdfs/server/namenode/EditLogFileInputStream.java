@@ -157,7 +157,7 @@ public class EditLogFileInputStream extends EditLogInputStream {
               "flags from log");
         }
       }
-      reader = FSEditLogOp.Reader.create(dataIn, tracker, logVersion);
+      reader = new FSEditLogOp.Reader(dataIn, tracker, logVersion);
       reader.setMaxOpSize(maxOpSize);
       state = State.OPEN;
     } finally {
@@ -300,17 +300,8 @@ public class EditLogFileInputStream extends EditLogInputStream {
     return getName();
   }
 
-  /**
-   * @param file File being validated.
-   * @param maxTxIdToValidate Maximum Tx ID to try to validate. Validation
-   *                          returns after reading this or a higher ID.
-   *                          The file portion beyond this ID is potentially
-   *                          being updated.
-   * @return Result of the validation
-   * @throws IOException
-   */
-  static FSEditLogLoader.EditLogValidation validateEditLog(File file,
-      long maxTxIdToValidate) throws IOException {
+  static FSEditLogLoader.EditLogValidation validateEditLog(File file)
+      throws IOException {
     EditLogFileInputStream in;
     try {
       in = new EditLogFileInputStream(file);
@@ -323,7 +314,7 @@ public class EditLogFileInputStream extends EditLogInputStream {
     }
     
     try {
-      return FSEditLogLoader.validateEditLog(in, maxTxIdToValidate);
+      return FSEditLogLoader.validateEditLog(in);
     } finally {
       IOUtils.closeStream(in);
     }

@@ -33,7 +33,6 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.NodeLabel;
@@ -93,7 +92,12 @@ public class FileSystemNodeLabelsStore extends NodeLabelsStore {
 
   @Override
   public void close() throws IOException {
-    IOUtils.cleanup(LOG, fs, editlogOs);
+    try {
+      fs.close();
+      editlogOs.close();
+    } catch (IOException e) {
+      LOG.warn("Exception happened whiling shutting down,", e);
+    }
   }
 
   private void setFileSystem(Configuration conf) throws IOException {
@@ -123,40 +127,31 @@ public class FileSystemNodeLabelsStore extends NodeLabelsStore {
   @Override
   public void updateNodeToLabelsMappings(
       Map<NodeId, Set<String>> nodeToLabels) throws IOException {
-    try {
-      ensureAppendEditlogFile();
-      editlogOs.writeInt(SerializedLogType.NODE_TO_LABELS.ordinal());
-      ((ReplaceLabelsOnNodeRequestPBImpl) ReplaceLabelsOnNodeRequest
-          .newInstance(nodeToLabels)).getProto().writeDelimitedTo(editlogOs);
-    } finally {
-      ensureCloseEditlogFile();
-    }
+    ensureAppendEditlogFile();
+    editlogOs.writeInt(SerializedLogType.NODE_TO_LABELS.ordinal());
+    ((ReplaceLabelsOnNodeRequestPBImpl) ReplaceLabelsOnNodeRequest
+        .newInstance(nodeToLabels)).getProto().writeDelimitedTo(editlogOs);
+    ensureCloseEditlogFile();
   }
 
   @Override
   public void storeNewClusterNodeLabels(List<NodeLabel> labels)
       throws IOException {
-    try {
-      ensureAppendEditlogFile();
-      editlogOs.writeInt(SerializedLogType.ADD_LABELS.ordinal());
-      ((AddToClusterNodeLabelsRequestPBImpl) AddToClusterNodeLabelsRequest
-          .newInstance(labels)).getProto().writeDelimitedTo(editlogOs);
-    } finally {
-      ensureCloseEditlogFile();
-    }
+    ensureAppendEditlogFile();
+    editlogOs.writeInt(SerializedLogType.ADD_LABELS.ordinal());
+    ((AddToClusterNodeLabelsRequestPBImpl) AddToClusterNodeLabelsRequest
+        .newInstance(labels)).getProto().writeDelimitedTo(editlogOs);
+    ensureCloseEditlogFile();
   }
 
   @Override
   public void removeClusterNodeLabels(Collection<String> labels)
       throws IOException {
-    try {
-      ensureAppendEditlogFile();
-      editlogOs.writeInt(SerializedLogType.REMOVE_LABELS.ordinal());
-      ((RemoveFromClusterNodeLabelsRequestPBImpl) RemoveFromClusterNodeLabelsRequest.newInstance(Sets
-          .newHashSet(labels.iterator()))).getProto().writeDelimitedTo(editlogOs);
-    } finally {
-      ensureCloseEditlogFile();
-    }
+    ensureAppendEditlogFile();
+    editlogOs.writeInt(SerializedLogType.REMOVE_LABELS.ordinal());
+    ((RemoveFromClusterNodeLabelsRequestPBImpl) RemoveFromClusterNodeLabelsRequest.newInstance(Sets
+        .newHashSet(labels.iterator()))).getProto().writeDelimitedTo(editlogOs);
+    ensureCloseEditlogFile();
   }
 
   /* (non-Javadoc)

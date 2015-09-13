@@ -19,6 +19,7 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import com.google.common.base.Preconditions;
+
 import org.apache.commons.io.Charsets;
 import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.DirectoryListingStartAfterNotFoundException;
@@ -27,8 +28,9 @@ import org.apache.hadoop.fs.InvalidPathException;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DFSUtil;
-import org.apache.hadoop.hdfs.protocol.ClientProtocol;
 import org.apache.hadoop.hdfs.protocol.DirectoryListing;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingZone;
 import org.apache.hadoop.hdfs.protocol.FsPermissionExtension;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.HdfsFileStatus;
@@ -36,7 +38,6 @@ import org.apache.hadoop.hdfs.protocol.HdfsLocatedFileStatus;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.protocol.SnapshotException;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.DirectorySnapshottableFeature;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
@@ -44,8 +45,6 @@ import org.apache.hadoop.hdfs.util.ReadOnlyList;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
-
-import static org.apache.hadoop.util.Time.now;
 
 class FSDirStatAndListingOp {
   static DirectoryListing getListingInt(FSDirectory fsd, final String srcArg,
@@ -105,11 +104,13 @@ class FSDirStatAndListingOp {
     byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
     src = fsd.resolvePath(pc, src, pathComponents);
     final INodesInPath iip = fsd.getINodesInPath(src, resolveLink);
+    boolean isSuperUser = true;
     if (fsd.isPermissionEnabled()) {
       fsd.checkPermission(pc, iip, false, null, null, null, null, false);
+      isSuperUser = pc.isSuperUser();
     }
     return getFileInfo(fsd, src, resolveLink,
-        FSDirectory.isReservedRawName(srcArg));
+        FSDirectory.isReservedRawName(srcArg), isSuperUser);
   }
 
   /**
@@ -139,69 +140,9 @@ class FSDirStatAndListingOp {
     return getContentSummaryInt(fsd, iip);
   }
 
-  /**
-   * Get block locations within the specified range.
-   * @see ClientProtocol#getBlockLocations(String, long, long)
-   * @throws IOException
-   */
-  static GetBlockLocationsResult getBlockLocations(
-      FSDirectory fsd, FSPermissionChecker pc, String src, long offset,
-      long length, boolean needBlockToken) throws IOException {
-    Preconditions.checkArgument(offset >= 0,
-        "Negative offset is not supported. File: " + src);
-    Preconditions.checkArgument(length >= 0,
-        "Negative length is not supported. File: " + src);
-    CacheManager cm = fsd.getFSNamesystem().getCacheManager();
-    BlockManager bm = fsd.getBlockManager();
-    byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
-    boolean isReservedName = FSDirectory.isReservedRawName(src);
-    fsd.readLock();
-    try {
-      src = fsd.resolvePath(pc, src, pathComponents);
-      final INodesInPath iip = fsd.getINodesInPath(src, true);
-      final INodeFile inode = INodeFile.valueOf(iip.getLastINode(), src);
-      if (fsd.isPermissionEnabled()) {
-        fsd.checkPathAccess(pc, iip, FsAction.READ);
-        fsd.checkUnreadableBySuperuser(pc, inode, iip.getPathSnapshotId());
-      }
-
-      final long fileSize = iip.isSnapshot()
-          ? inode.computeFileSize(iip.getPathSnapshotId())
-          : inode.computeFileSizeNotIncludingLastUcBlock();
-
-      boolean isUc = inode.isUnderConstruction();
-      if (iip.isSnapshot()) {
-        // if src indicates a snapshot file, we need to make sure the returned
-        // blocks do not exceed the size of the snapshot file.
-        length = Math.min(length, fileSize - offset);
-        isUc = false;
-      }
-
-      final FileEncryptionInfo feInfo = isReservedName ? null
-          : fsd.getFileEncryptionInfo(inode, iip.getPathSnapshotId(), iip);
-
-      final LocatedBlocks blocks = bm.createLocatedBlocks(
-          inode.getBlocks(iip.getPathSnapshotId()), fileSize, isUc, offset,
-          length, needBlockToken, iip.isSnapshot(), feInfo);
-
-      // Set caching information for the located blocks.
-      for (LocatedBlock lb : blocks.getLocatedBlocks()) {
-        cm.setCachedLocations(lb);
-      }
-
-      final long now = now();
-      boolean updateAccessTime = fsd.isAccessTimeSupported()
-          && !iip.isSnapshot()
-          && now > inode.getAccessTime() + fsd.getAccessTimePrecision();
-      return new GetBlockLocationsResult(updateAccessTime, blocks);
-    } finally {
-      fsd.readUnlock();
-    }
-  }
-
   private static byte getStoragePolicyID(byte inodePolicy, byte parentPolicy) {
-    return inodePolicy != HdfsConstants.BLOCK_STORAGE_POLICY_ID_UNSPECIFIED
-        ? inodePolicy : parentPolicy;
+    return inodePolicy != HdfsConstants.BLOCK_STORAGE_POLICY_ID_UNSPECIFIED ? inodePolicy :
+        parentPolicy;
   }
 
   /**
@@ -356,25 +297,28 @@ class FSDirStatAndListingOp {
       byte policyId = includeStoragePolicy && !i.isSymlink() ?
           i.getStoragePolicyID() :
           HdfsConstants.BLOCK_STORAGE_POLICY_ID_UNSPECIFIED;
-      INodeAttributes nodeAttrs = getINodeAttributes(fsd, path,
-                                                     HdfsFileStatus.EMPTY_NAME,
-                                                     i, src.getPathSnapshotId());
-      return createFileStatus(fsd, HdfsFileStatus.EMPTY_NAME, i, nodeAttrs,
-                              policyId, src.getPathSnapshotId(), isRawPath, src);
+      INodeAttributes nodeAttrs = getINodeAttributes(
+          fsd, path, HdfsFileStatus.EMPTY_NAME, i, src.getPathSnapshotId());
+      return createFileStatus(
+          fsd, HdfsFileStatus.EMPTY_NAME,
+          i, nodeAttrs, policyId,
+          src.getPathSnapshotId(),
+          isRawPath, src);
     } finally {
       fsd.readUnlock();
     }
   }
 
   static HdfsFileStatus getFileInfo(
-      FSDirectory fsd, String src, boolean resolveLink, boolean isRawPath)
+      FSDirectory fsd, String src, boolean resolveLink, boolean isRawPath,
+      boolean includeStoragePolicy)
     throws IOException {
     String srcs = FSDirectory.normalizePath(src);
     if (srcs.endsWith(HdfsConstants.SEPARATOR_DOT_SNAPSHOT_DIR)) {
       if (fsd.getINode4DotSnapshot(srcs) != null) {
         return new HdfsFileStatus(0, true, 0, 0, 0, 0, null, null, null, null,
             HdfsFileStatus.EMPTY_NAME, -1L, 0, null,
-            HdfsConstants.BLOCK_STORAGE_POLICY_ID_UNSPECIFIED);
+            HdfsConstants.BLOCK_STORAGE_POLICY_ID_UNSPECIFIED, null);
       }
       return null;
     }
@@ -382,7 +326,7 @@ class FSDirStatAndListingOp {
     fsd.readLock();
     try {
       final INodesInPath iip = fsd.getINodesInPath(srcs, resolveLink);
-      return getFileInfo(fsd, src, iip, isRawPath, true);
+      return getFileInfo(fsd, src, iip, isRawPath, includeStoragePolicy);
     } finally {
       fsd.readUnlock();
     }
@@ -442,6 +386,11 @@ class FSDirStatAndListingOp {
     final FileEncryptionInfo feInfo = isRawPath ? null :
         fsd.getFileEncryptionInfo(node, snapshot, iip);
 
+    final ErasureCodingZone ecZone = FSDirErasureCodingOp.getErasureCodingZone(
+        fsd.getFSNamesystem(), iip);
+    final ErasureCodingPolicy ecPolicy =
+        ecZone != null ? ecZone.getErasureCodingPolicy() : null;
+
     if (node.isFile()) {
       final INodeFile fileNode = node.asFile();
       size = fileNode.computeFileSize(snapshot);
@@ -471,7 +420,8 @@ class FSDirStatAndListingOp {
         node.getId(),
         childrenNum,
         feInfo,
-        storagePolicy);
+        storagePolicy,
+        ecPolicy);
   }
 
   private static INodeAttributes getINodeAttributes(
@@ -494,6 +444,8 @@ class FSDirStatAndListingOp {
     final boolean isEncrypted;
     final FileEncryptionInfo feInfo = isRawPath ? null :
         fsd.getFileEncryptionInfo(node, snapshot, iip);
+    final ErasureCodingZone ecZone = FSDirErasureCodingOp.getErasureCodingZone(
+        fsd.getFSNamesystem(), iip);
     if (node.isFile()) {
       final INodeFile fileNode = node.asFile();
       size = fileNode.computeFileSize(snapshot);
@@ -505,9 +457,9 @@ class FSDirStatAndListingOp {
       final long fileSize = !inSnapshot && isUc ?
           fileNode.computeFileSizeNotIncludingLastUcBlock() : size;
 
-      loc = fsd.getBlockManager().createLocatedBlocks(
+      loc = fsd.getFSNamesystem().getBlockManager().createLocatedBlocks(
           fileNode.getBlocks(snapshot), fileSize, isUc, 0L, size, false,
-          inSnapshot, feInfo);
+          inSnapshot, feInfo, ecZone);
       if (loc == null) {
         loc = new LocatedBlocks();
       }
@@ -518,6 +470,8 @@ class FSDirStatAndListingOp {
     }
     int childrenNum = node.isDirectory() ?
         node.asDirectory().getChildrenNum(snapshot) : 0;
+    final ErasureCodingPolicy ecPolicy =
+        ecZone != null ? ecZone.getErasureCodingPolicy() : null;
 
     HdfsLocatedFileStatus status =
         new HdfsLocatedFileStatus(size, node.isDirectory(), replication,
@@ -526,7 +480,7 @@ class FSDirStatAndListingOp {
           getPermissionForFileStatus(nodeAttrs, isEncrypted),
           nodeAttrs.getUserName(), nodeAttrs.getGroupName(),
           node.isSymlink() ? node.asSymlink().getSymlink() : null, path,
-          node.getId(), loc, childrenNum, feInfo, storagePolicy);
+          node.getId(), loc, childrenNum, feInfo, storagePolicy, ecPolicy);
     // Set caching information for the located blocks.
     if (loc != null) {
       CacheManager cacheManager = fsd.getFSNamesystem().getCacheManager();
@@ -577,19 +531,6 @@ class FSDirStatAndListingOp {
       }
     } finally {
       fsd.readUnlock();
-    }
-  }
-
-  static class GetBlockLocationsResult {
-    final boolean updateAccessTime;
-    final LocatedBlocks blocks;
-    boolean updateAccessTime() {
-      return updateAccessTime;
-    }
-    private GetBlockLocationsResult(
-        boolean updateAccessTime, LocatedBlocks blocks) {
-      this.updateAccessTime = updateAccessTime;
-      this.blocks = blocks;
     }
   }
 }

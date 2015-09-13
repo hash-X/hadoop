@@ -80,6 +80,7 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Cont
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ContainerLocalizer;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.localizer.ResourceLocalizationService;
 import org.apache.hadoop.yarn.server.nodemanager.security.NMContainerTokenSecretManager;
+import org.apache.hadoop.yarn.server.security.ApplicationACLsManager;
 import org.apache.hadoop.yarn.server.utils.BuilderUtils;
 import org.apache.hadoop.yarn.util.ConverterUtils;
 import org.junit.Assert;
@@ -115,7 +116,7 @@ public class TestContainerManager extends BaseContainerManagerTest {
   protected ContainerManagerImpl
       createContainerManager(DeletionService delSrvc) {
     return new ContainerManagerImpl(context, exec, delSrvc, nodeStatusUpdater,
-      metrics, dirsHandler) {
+      metrics, new ApplicationACLsManager(conf), dirsHandler) {
       @Override
       public void
           setBlockNewContainerRequests(boolean blockNewContainerRequests) {
@@ -800,7 +801,7 @@ public class TestContainerManager extends BaseContainerManagerTest {
   public void testNullTokens() throws Exception {
     ContainerManagerImpl cMgrImpl =
         new ContainerManagerImpl(context, exec, delSrvc, nodeStatusUpdater,
-        metrics, dirsHandler);
+        metrics, new ApplicationACLsManager(conf), dirsHandler);
     String strExceptionMsg = "";
     try {
       cMgrImpl.authorizeStartRequest(null, new ContainerTokenIdentifier());

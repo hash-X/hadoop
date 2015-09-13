@@ -93,7 +93,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppAddedSch
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppRemovedSchedulerEvent;
 import org.apache.hadoop.yarn.server.utils.BuilderUtils;
 import org.apache.hadoop.yarn.server.webproxy.ProxyUriUtils;
-import org.apache.hadoop.yarn.state.InvalidStateTransitionException;
+import org.apache.hadoop.yarn.state.InvalidStateTransitonException;
 import org.apache.hadoop.yarn.state.MultipleArcTransition;
 import org.apache.hadoop.yarn.state.SingleArcTransition;
 import org.apache.hadoop.yarn.state.StateMachine;
@@ -660,12 +660,11 @@ public class RMAppImpl implements RMApp, Recoverable {
       ApplicationReport report = BuilderUtils.newApplicationReport(
           this.applicationId, currentApplicationAttemptId, this.user,
           this.queue, this.name, host, rpcPort, clientToAMToken,
-          createApplicationState(), diags, trackingUrl, this.startTime,
-          this.finishTime, finishState, appUsageReport, origTrackingUrl,
-          progress, this.applicationType, amrmToken, applicationTags,
-          this.submissionContext.getPriority());
+          createApplicationState(), diags,
+          trackingUrl, this.startTime, this.finishTime, finishState,
+          appUsageReport, origTrackingUrl, progress, this.applicationType, 
+          amrmToken, applicationTags);
       report.setLogAggregationStatus(logAggregationStatus);
-      report.setUnmanagedApp(submissionContext.getUnmanagedAM());
       return report;
     } finally {
       this.readLock.unlock();
@@ -760,7 +759,7 @@ public class RMAppImpl implements RMApp, Recoverable {
       try {
         /* keep the master in sync with the state machine */
         this.stateMachine.doTransition(event.getType(), event);
-      } catch (InvalidStateTransitionException e) {
+      } catch (InvalidStateTransitonException e) {
         LOG.error("Can't handle this event at current state", e);
         /* TODO fail the application on the failed transition */
       }
@@ -782,8 +781,7 @@ public class RMAppImpl implements RMApp, Recoverable {
     LOG.info("Recovering app: " + getApplicationId() + " with " + 
         + appState.getAttemptCount() + " attempts and final state = "
         + this.recoveredFinalState );
-    this.diagnostics.append(null == appState.getDiagnostics() ? "" : appState
-        .getDiagnostics());
+    this.diagnostics.append(appState.getDiagnostics());
     this.storedFinishTime = appState.getFinishTime();
     this.startTime = appState.getStartTime();
 
@@ -926,15 +924,17 @@ public class RMAppImpl implements RMApp, Recoverable {
       // No existent attempts means the attempt associated with this app was not
       // started or started but not yet saved.
       if (app.attempts.isEmpty()) {
-        app.scheduler.handle(new AppAddedSchedulerEvent(app.user,
-            app.submissionContext, false));
+        app.scheduler.handle(new AppAddedSchedulerEvent(app.applicationId,
+          app.submissionContext.getQueue(), app.user,
+          app.submissionContext.getReservationID()));
         return RMAppState.SUBMITTED;
       }
 
       // Add application to scheduler synchronously to guarantee scheduler
       // knows applications before AM or NM re-registers.
-      app.scheduler.handle(new AppAddedSchedulerEvent(app.user,
-          app.submissionContext, true));
+      app.scheduler.handle(new AppAddedSchedulerEvent(app.applicationId,
+        app.submissionContext.getQueue(), app.user, true,
+          app.submissionContext.getReservationID()));
 
       // recover attempts
       app.recoverAppAttempts();
@@ -960,8 +960,9 @@ public class RMAppImpl implements RMApp, Recoverable {
       RMAppTransition {
     @Override
     public void transition(RMAppImpl app, RMAppEvent event) {
-      app.handler.handle(new AppAddedSchedulerEvent(app.user,
-          app.submissionContext, false));
+      app.handler.handle(new AppAddedSchedulerEvent(app.applicationId,
+        app.submissionContext.getQueue(), app.user,
+        app.submissionContext.getReservationID()));
     }
   }
 
@@ -1013,19 +1014,9 @@ public class RMAppImpl implements RMApp, Recoverable {
               + " failed due to " + failedEvent.getDiagnostics()
               + ". Failing the application.";
     } else if (this.isNumAttemptsBeyondThreshold) {
-      int globalLimit = conf.getInt(YarnConfiguration.RM_AM_MAX_ATTEMPTS,
-          YarnConfiguration.DEFAULT_RM_AM_MAX_ATTEMPTS);
-      msg = String.format(
-        "Application %s failed %d times%s%s due to %s. Failing the application.",
-          getApplicationId(),
-          maxAppAttempts,
-          (attemptFailuresValidityInterval <= 0 ? ""
-               : (" in previous " + attemptFailuresValidityInterval
-                  + " milliseconds")),
-          (globalLimit == maxAppAttempts) ? ""
-              : (" (global limit =" + globalLimit
-                 + "; local limit is =" + maxAppAttempts + ")"),
-          failedEvent.getDiagnostics());
+      msg = "Application " + this.getApplicationId() + " failed "
+              + this.maxAppAttempts + " times due to "
+              + failedEvent.getDiagnostics() + ". Failing the application.";
     }
     return msg;
   }

@@ -38,12 +38,13 @@ import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.Resource;
+import org.apache.hadoop.yarn.event.EventHandler;
 import org.apache.hadoop.yarn.exceptions.YarnRuntimeException;
-import org.apache.hadoop.yarn.server.resourcemanager.RMContext;
 import org.apache.hadoop.yarn.server.resourcemanager.monitor.SchedulingEditPolicy;
 import org.apache.hadoop.yarn.server.resourcemanager.nodelabels.RMNodeLabelsManager;
 import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.RMContainer;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.ContainerPreemptEvent;
+import org.apache.hadoop.yarn.server.resourcemanager.scheduler.ContainerPreemptEventType;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.PreemptableResourceScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CSQueue;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.CapacityScheduler;
@@ -51,7 +52,6 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.Capacity
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.LeafQueue;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity.QueueCapacities;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerApp;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.SchedulerEventType;
 import org.apache.hadoop.yarn.util.Clock;
 import org.apache.hadoop.yarn.util.SystemClock;
 import org.apache.hadoop.yarn.util.resource.ResourceCalculator;
@@ -118,7 +118,8 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
   public static final String NATURAL_TERMINATION_FACTOR =
       "yarn.resourcemanager.monitor.capacity.preemption.natural_termination_factor";
 
-  private RMContext rmContext;
+  // the dispatcher to send preempt and kill events
+  public EventHandler<ContainerPreemptEvent> dispatcher;
 
   private final Clock clock;
   private double maxIgnoredOverCapacity;
@@ -140,17 +141,20 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
   }
 
   public ProportionalCapacityPreemptionPolicy(Configuration config,
-      RMContext context, CapacityScheduler scheduler) {
-    this(config, context, scheduler, new SystemClock());
+      EventHandler<ContainerPreemptEvent> dispatcher,
+      CapacityScheduler scheduler) {
+    this(config, dispatcher, scheduler, new SystemClock());
   }
 
   public ProportionalCapacityPreemptionPolicy(Configuration config,
-      RMContext context, CapacityScheduler scheduler, Clock clock) {
-    init(config, context, scheduler);
+      EventHandler<ContainerPreemptEvent> dispatcher,
+      CapacityScheduler scheduler, Clock clock) {
+    init(config, dispatcher, scheduler);
     this.clock = clock;
   }
 
-  public void init(Configuration config, RMContext context,
+  public void init(Configuration config,
+      EventHandler<ContainerPreemptEvent> disp,
       PreemptableResourceScheduler sched) {
     LOG.info("Preemption monitor:" + this.getClass().getCanonicalName());
     assert null == scheduler : "Unexpected duplicate call to init";
@@ -159,7 +163,7 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
           sched.getClass().getCanonicalName() + " not instance of " +
           CapacityScheduler.class.getCanonicalName());
     }
-    rmContext = context;
+    dispatcher = disp;
     scheduler = (CapacityScheduler) sched;
     maxIgnoredOverCapacity = config.getDouble(MAX_IGNORED_OVER_CAPACITY, 0.1);
     naturalTerminationFactor =
@@ -192,7 +196,6 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
    * @param root the root of the CapacityScheduler queue hierarchy
    * @param clusterResources the total amount of resources in the cluster
    */
-  @SuppressWarnings("unchecked")
   private void containerBasedPreemptOrKill(CSQueue root,
       Resource clusterResources) {
     // All partitions to look at
@@ -245,9 +248,8 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
     // preempt (or kill) the selected containers
     for (Map.Entry<ApplicationAttemptId,Set<RMContainer>> e
          : toPreempt.entrySet()) {
-      ApplicationAttemptId appAttemptId = e.getKey();
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Send to scheduler: in app=" + appAttemptId
+        LOG.debug("Send to scheduler: in app=" + e.getKey()
             + " #containers-to-be-preempted=" + e.getValue().size());
       }
       for (RMContainer container : e.getValue()) {
@@ -255,21 +257,16 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
         if (preempted.get(container) != null &&
             preempted.get(container) + maxWaitTime < clock.getTime()) {
           // kill it
-          rmContext.getDispatcher().getEventHandler().handle(
-              new ContainerPreemptEvent(appAttemptId, container,
-                  SchedulerEventType.KILL_CONTAINER));
+          dispatcher.handle(new ContainerPreemptEvent(e.getKey(), container,
+                ContainerPreemptEventType.KILL_CONTAINER));
           preempted.remove(container);
         } else {
-          if (preempted.get(container) != null) {
-            // We already updated the information to scheduler earlier, we need
-            // not have to raise another event.
-            continue;
-          }
           //otherwise just send preemption events
-          rmContext.getDispatcher().getEventHandler().handle(
-              new ContainerPreemptEvent(appAttemptId, container,
-                  SchedulerEventType.PREEMPT_CONTAINER));
-          preempted.put(container, clock.getTime());
+          dispatcher.handle(new ContainerPreemptEvent(e.getKey(), container,
+                ContainerPreemptEventType.PREEMPT_CONTAINER));
+          if (preempted.get(container) == null) {
+            preempted.put(container, clock.getTime());
+          }
         }
       }
     }
@@ -738,7 +735,6 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
    * Given a target preemption for a specific application, select containers
    * to preempt (after unreserving all reservation for that app).
    */
-  @SuppressWarnings("unchecked")
   private void preemptFrom(FiCaSchedulerApp app,
       Resource clusterResource, Map<String, Resource> resToObtainByPartition,
       List<RMContainer> skippedAMContainerlist, Resource skippedAMSize,
@@ -762,9 +758,8 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
           clusterResource, preemptMap);
 
       if (!observeOnly) {
-        rmContext.getDispatcher().getEventHandler().handle(
-            new ContainerPreemptEvent(
-                appId, c, SchedulerEventType.DROP_RESERVATION));
+        dispatcher.handle(new ContainerPreemptEvent(appId, c,
+            ContainerPreemptEventType.DROP_RESERVATION));
       }
     }
 
@@ -843,12 +838,12 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
     synchronized (curQueue) {
       String queueName = curQueue.getQueueName();
       QueueCapacities qc = curQueue.getQueueCapacities();
+      float absUsed = qc.getAbsoluteUsedCapacity(partitionToLookAt);
       float absCap = qc.getAbsoluteCapacity(partitionToLookAt);
       float absMaxCap = qc.getAbsoluteMaximumCapacity(partitionToLookAt);
       boolean preemptionDisabled = curQueue.getPreemptionDisabled();
 
-      Resource current = curQueue.getQueueResourceUsage().getUsed(
-          partitionToLookAt);
+      Resource current = Resources.multiply(partitionResource, absUsed);
       Resource guaranteed = Resources.multiply(partitionResource, absCap);
       Resource maxCapacity = Resources.multiply(partitionResource, absMaxCap);
 
@@ -899,10 +894,8 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
           ret.untouchableExtra = Resource.newInstance(0, 0);
         } else {
           ret.untouchableExtra =
-                Resources.subtract(extra, childrensPreemptable);
+                Resources.subtractFrom(extra, childrensPreemptable);
         }
-        ret.preemptableExtra = Resources.min(
-            rc, partitionResource, childrensPreemptable, extra);
       }
     }
     addTempQueuePartition(ret);
@@ -1132,8 +1125,4 @@ public class ProportionalCapacityPreemptionPolicy implements SchedulingEditPolic
     }
   }
 
-  @VisibleForTesting
-  public Map<String, Map<String, TempQueuePerPartition>> getQueuePartitions() {
-    return queueToPartitions;
-  }
 }

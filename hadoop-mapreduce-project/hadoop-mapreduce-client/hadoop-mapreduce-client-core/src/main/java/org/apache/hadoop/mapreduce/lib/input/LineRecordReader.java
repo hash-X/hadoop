@@ -112,8 +112,7 @@ public class LineRecordReader extends RecordReader<LongWritable, Text> {
       }
     } else {
       fileIn.seek(start);
-      in = new UncompressedSplitLineReader(
-          fileIn, job, this.recordDelimiterBytes, split.getLength());
+      in = new SplitLineReader(fileIn, job, this.recordDelimiterBytes);
       filePosition = fileIn;
     }
     // If this is not the first split, we always throw away first record

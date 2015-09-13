@@ -210,9 +210,6 @@ public class TestHarFileSystem {
     public void setStoragePolicy(Path src, String policyName)
         throws IOException;
 
-    public BlockStoragePolicySpi getStoragePolicy(final Path src)
-        throws IOException;
-
     public Collection<? extends BlockStoragePolicySpi> getAllStoragePolicies()
         throws IOException;
   }

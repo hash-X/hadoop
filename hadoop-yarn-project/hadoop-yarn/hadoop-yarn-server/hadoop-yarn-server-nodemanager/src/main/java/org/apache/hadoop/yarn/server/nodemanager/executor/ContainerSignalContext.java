@@ -23,7 +23,6 @@ package org.apache.hadoop.yarn.server.nodemanager.executor;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor.Signal;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 
 /**
  * Encapsulates information required for container signaling.
@@ -32,23 +31,16 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Cont
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
 public final class ContainerSignalContext {
-  private final Container container;
   private final String user;
   private final String pid;
   private final Signal signal;
 
   public static final class Builder {
-    private Container container;
     private String user;
     private String pid;
     private Signal signal;
 
     public Builder() {
-    }
-
-    public Builder setContainer(Container container) {
-      this.container = container;
-      return this;
     }
 
     public Builder setUser(String user) {
@@ -72,14 +64,9 @@ public final class ContainerSignalContext {
   }
 
   private ContainerSignalContext(Builder builder) {
-    this.container = builder.container;
     this.user = builder.user;
     this.pid = builder.pid;
     this.signal = builder.signal;
-  }
-
-  public Container getContainer() {
-    return this.container;
   }
 
   public String getUser() {

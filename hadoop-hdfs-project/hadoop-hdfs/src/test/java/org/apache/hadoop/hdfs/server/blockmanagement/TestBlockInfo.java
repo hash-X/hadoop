@@ -17,7 +17,6 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
-import static org.apache.hadoop.hdfs.server.namenode.INodeId.INVALID_INODE_ID;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -50,21 +49,21 @@ public class TestBlockInfo {
 
   @Test
   public void testIsDeleted() {
-    BlockInfo blockInfo = new BlockInfoContiguous((short) 3);
+    BlockInfoContiguous blockInfo = new BlockInfoContiguous((short) 3);
     BlockCollection bc = Mockito.mock(BlockCollection.class);
-    blockInfo.setBlockCollectionId(1000);
+    blockInfo.setBlockCollection(bc);
     Assert.assertFalse(blockInfo.isDeleted());
-    blockInfo.setBlockCollectionId(INVALID_INODE_ID);
+    blockInfo.setBlockCollection(null);
     Assert.assertTrue(blockInfo.isDeleted());
   }
 
   @Test
   public void testAddStorage() throws Exception {
-    BlockInfo blockInfo = new BlockInfoContiguous((short) 3);
+    BlockInfoContiguous blockInfo = new BlockInfoContiguous((short) 3);
 
     final DatanodeStorageInfo storage = DFSTestUtil.createDatanodeStorageInfo("storageID", "127.0.0.1");
 
-    boolean added = blockInfo.addStorage(storage);
+    boolean added = blockInfo.addStorage(storage, blockInfo);
 
     Assert.assertTrue(added);
     Assert.assertEquals(storage, blockInfo.getStorageInfo(0));
@@ -75,7 +74,7 @@ public class TestBlockInfo {
     BlockInfoContiguous old = new BlockInfoContiguous((short) 3);
     try {
       BlockInfoContiguous copy = new BlockInfoContiguous(old);
-      assertEquals(old.getBlockCollectionId(), copy.getBlockCollectionId());
+      assertEquals(old.getBlockCollection(), copy.getBlockCollection());
       assertEquals(old.getCapacity(), copy.getCapacity());
     } catch (Exception e) {
       Assert.fail("Copy constructor throws exception: " + e);
@@ -89,7 +88,7 @@ public class TestBlockInfo {
     final DatanodeStorageInfo storage1 = DFSTestUtil.createDatanodeStorageInfo("storageID1", "127.0.0.1");
     final DatanodeStorageInfo storage2 = new DatanodeStorageInfo(storage1.getDatanodeDescriptor(), new DatanodeStorage("storageID2"));
     final int NUM_BLOCKS = 10;
-    BlockInfo[] blockInfos = new BlockInfo[NUM_BLOCKS];
+    BlockInfoContiguous[] blockInfos = new BlockInfoContiguous[NUM_BLOCKS];
 
     // Create a few dummy blocks and add them to the first storage.
     for (int i = 0; i < NUM_BLOCKS; ++i) {
@@ -112,7 +111,7 @@ public class TestBlockInfo {
 
     DatanodeStorageInfo dd = DFSTestUtil.createDatanodeStorageInfo("s1", "1.1.1.1");
     ArrayList<Block> blockList = new ArrayList<Block>(MAX_BLOCKS);
-    ArrayList<BlockInfo> blockInfoList = new ArrayList<BlockInfo>();
+    ArrayList<BlockInfoContiguous> blockInfoList = new ArrayList<BlockInfoContiguous>();
     int headIndex;
     int curIndex;
 

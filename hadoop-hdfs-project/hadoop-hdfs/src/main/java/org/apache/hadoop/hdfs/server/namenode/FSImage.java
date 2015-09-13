@@ -40,10 +40,12 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.HAUtil;
 import org.apache.hadoop.hdfs.protocol.LayoutVersion;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NamenodeRole;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.RollingUpgradeStartupOption;
@@ -57,6 +59,7 @@ import org.apache.hadoop.hdfs.server.common.Util;
 import org.apache.hadoop.hdfs.server.namenode.FSImageStorageInspector.FSImageFile;
 import org.apache.hadoop.hdfs.server.namenode.NNStorage.NameNodeDirType;
 import org.apache.hadoop.hdfs.server.namenode.NNStorage.NameNodeFile;
+import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.hdfs.server.namenode.startupprogress.Phase;
 import org.apache.hadoop.hdfs.server.namenode.startupprogress.StartupProgress;
 import org.apache.hadoop.hdfs.server.protocol.CheckpointCommand;
@@ -65,6 +68,7 @@ import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocol;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeRegistration;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.util.Canceler;
+import org.apache.hadoop.hdfs.util.EnumCounters;
 import org.apache.hadoop.hdfs.util.MD5FileUtils;
 import org.apache.hadoop.io.MD5Hash;
 import org.apache.hadoop.util.Time;
@@ -96,7 +100,6 @@ public class FSImage implements Closeable {
   final private Configuration conf;
 
   protected NNStorageRetentionManager archivalManager;
-  private int quotaInitThreads;
 
   /* Used to make sure there are no concurrent checkpoints for a given txid
    * The checkpoint here could be one of the following operations.
@@ -141,6 +144,7 @@ public class FSImage implements Closeable {
     }
 
     this.editLog = new FSEditLog(conf, storage, editsDirs);
+    
     archivalManager = new NNStorageRetentionManager(conf, storage, editLog);
   }
  
@@ -568,9 +572,9 @@ public class FSImage implements Closeable {
     return editLog;
   }
 
-  void openEditLogForWrite(int layoutVersion) throws IOException {
+  void openEditLogForWrite() throws IOException {
     assert editLog != null : "editLog must be initialized";
-    editLog.openForWrite(layoutVersion);
+    editLog.openForWrite();
     storage.writeTransactionIdFileToStorage(editLog.getCurSegmentTxId());
   }
   
@@ -841,9 +845,85 @@ public class FSImage implements Closeable {
       }
     } finally {
       FSEditLog.closeAllStreams(editStreams);
+      // update the counts
+      updateCountForQuota(target.getBlockManager().getStoragePolicySuite(),
+          target.dir.rootDir);
     }
     prog.endPhase(Phase.LOADING_EDITS);
     return lastAppliedTxId - prevLastAppliedTxId;
+  }
+
+  /**
+   * Update the count of each directory with quota in the namespace.
+   * A directory's count is defined as the total number inodes in the tree
+   * rooted at the directory.
+   * 
+   * This is an update of existing state of the filesystem and does not
+   * throw QuotaExceededException.
+   */
+  static void updateCountForQuota(BlockStoragePolicySuite bsps,
+                                  INodeDirectory root) {
+    updateCountForQuotaRecursively(bsps, root.getStoragePolicyID(), root,
+        new QuotaCounts.Builder().build());
+ }
+
+  private static void updateCountForQuotaRecursively(BlockStoragePolicySuite bsps,
+      byte blockStoragePolicyId, INodeDirectory dir, QuotaCounts counts) {
+    final long parentNamespace = counts.getNameSpace();
+    final long parentStoragespace = counts.getStorageSpace();
+    final EnumCounters<StorageType> parentTypeSpaces = counts.getTypeSpaces();
+
+    dir.computeQuotaUsage4CurrentDirectory(bsps, blockStoragePolicyId, counts);
+    
+    for (INode child : dir.getChildrenList(Snapshot.CURRENT_STATE_ID)) {
+      final byte childPolicyId = child.getStoragePolicyIDForQuota(blockStoragePolicyId);
+      if (child.isDirectory()) {
+        updateCountForQuotaRecursively(bsps, childPolicyId,
+            child.asDirectory(), counts);
+      } else {
+        // file or symlink: count here to reduce recursive calls.
+        counts.add(child.computeQuotaUsage(bsps, childPolicyId, false,
+            Snapshot.CURRENT_STATE_ID));
+      }
+    }
+      
+    if (dir.isQuotaSet()) {
+      // check if quota is violated. It indicates a software bug.
+      final QuotaCounts q = dir.getQuotaCounts();
+
+      final long namespace = counts.getNameSpace() - parentNamespace;
+      final long nsQuota = q.getNameSpace();
+      if (Quota.isViolated(nsQuota, namespace)) {
+        LOG.warn("Namespace quota violation in image for "
+            + dir.getFullPathName()
+            + " quota = " + nsQuota + " < consumed = " + namespace);
+      }
+
+      final long ssConsumed = counts.getStorageSpace() - parentStoragespace;
+      final long ssQuota = q.getStorageSpace();
+      if (Quota.isViolated(ssQuota, ssConsumed)) {
+        LOG.warn("Storagespace quota violation in image for "
+            + dir.getFullPathName()
+            + " quota = " + ssQuota + " < consumed = " + ssConsumed);
+      }
+
+      final EnumCounters<StorageType> typeSpaces =
+          new EnumCounters<StorageType>(StorageType.class);
+      for (StorageType t : StorageType.getTypesSupportingQuota()) {
+        final long typeSpace = counts.getTypeSpaces().get(t) -
+            parentTypeSpaces.get(t);
+        final long typeQuota = q.getTypeSpaces().get(t);
+        if (Quota.isViolated(typeQuota, typeSpace)) {
+          LOG.warn("Storage type quota violation in image for "
+              + dir.getFullPathName()
+              + " type = " + t.toString() + " quota = "
+              + typeQuota + " < consumed " + typeSpace);
+        }
+      }
+
+      dir.getDirectoryWithQuotaFeature().setSpaceConsumed(namespace, ssConsumed,
+          typeSpaces);
+    }
   }
 
   /**
@@ -1047,13 +1127,10 @@ public class FSImage implements Closeable {
     try {
       try {
         saveFSImageInAllDirs(source, nnf, imageTxId, canceler);
-        if (!source.isRollingUpgrade()) {
-          storage.writeAll();
-        }
+        storage.writeAll();
       } finally {
         if (editLogWasOpen) {
-          editLog.startLogSegmentAndWriteHeaderTxn(imageTxId + 1,
-              source.getEffectiveLayoutVersion());
+          editLog.startLogSegmentAndWriteHeaderTxn(imageTxId + 1);
           // Take this opportunity to note the current transaction.
           // Even if the namespace save was cancelled, this marker
           // is only used to determine what transaction ID is required
@@ -1132,7 +1209,6 @@ public class FSImage implements Closeable {
       // Since we now have a new checkpoint, we can clean up some
       // old edit logs and checkpoints.
       purgeOldStorage(nnf);
-      archivalManager.purgeCheckpoints(NameNodeFile.IMAGE_NEW);
     } finally {
       // Notify any threads waiting on the checkpoint to be canceled
       // that it is complete.
@@ -1238,8 +1314,8 @@ public class FSImage implements Closeable {
     }
   }
 
-  CheckpointSignature rollEditLog(int layoutVersion) throws IOException {
-    getEditLog().rollEditLog(layoutVersion);
+  CheckpointSignature rollEditLog() throws IOException {
+    getEditLog().rollEditLog();
     // Record this log segment ID in all of the storage directories, so
     // we won't miss this log segment on a restart if the edits directories
     // go missing.
@@ -1264,8 +1340,7 @@ public class FSImage implements Closeable {
    * @throws IOException
    */
   NamenodeCommand startCheckpoint(NamenodeRegistration bnReg, // backup node
-                                  NamenodeRegistration nnReg,
-                                  int layoutVersion) // active name-node
+                                  NamenodeRegistration nnReg) // active name-node
   throws IOException {
     LOG.info("Start checkpoint at txid " + getEditLog().getLastWrittenTxId());
     String msg = null;
@@ -1294,7 +1369,7 @@ public class FSImage implements Closeable {
     if(storage.getNumStorageDirs(NameNodeDirType.IMAGE) == 0)
       // do not return image if there are no image directories
       needToReturnImg = false;
-    CheckpointSignature sig = rollEditLog(layoutVersion);
+    CheckpointSignature sig = rollEditLog();
     return new CheckpointCommand(sig, needToReturnImg);
   }
 

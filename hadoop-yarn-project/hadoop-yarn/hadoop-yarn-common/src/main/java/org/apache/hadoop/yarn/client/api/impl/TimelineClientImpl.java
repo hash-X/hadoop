@@ -368,12 +368,9 @@ public class TimelineClientImpl extends TimelineClient {
   public long renewDelegationToken(
       final Token<TimelineDelegationTokenIdentifier> timelineDT)
           throws IOException, YarnException {
-    final boolean isTokenServiceAddrEmpty =
-        timelineDT.getService().toString().isEmpty();
-    final String scheme = isTokenServiceAddrEmpty ? null
-        : (YarnConfiguration.useHttps(this.getConfig()) ? "https" : "http");
-    final InetSocketAddress address = isTokenServiceAddrEmpty ? null
-        : SecurityUtil.getTokenServiceAddr(timelineDT);
+    boolean useHttps = YarnConfiguration.useHttps(this.getConfig());
+    final String scheme = useHttps ? "https" : "http";
+    final InetSocketAddress address = SecurityUtil.getTokenServiceAddr(timelineDT);
     PrivilegedExceptionAction<Long> renewDTAction =
         new PrivilegedExceptionAction<Long>() {
 
@@ -388,10 +385,7 @@ public class TimelineClientImpl extends TimelineClient {
             DelegationTokenAuthenticatedURL authUrl =
                 new DelegationTokenAuthenticatedURL(authenticator,
                     connConfigurator);
-            // If the token service address is not available, fall back to use
-            // the configured service address.
-            final URI serviceURI = isTokenServiceAddrEmpty ? resURI
-                : new URI(scheme, null, address.getHostName(),
+            final URI serviceURI = new URI(scheme, null, address.getHostName(),
                 address.getPort(), RESOURCE_URI_STR, null, null);
             return authUrl
                 .renewDelegationToken(serviceURI.toURL(), token, doAsUser);
@@ -405,12 +399,9 @@ public class TimelineClientImpl extends TimelineClient {
   public void cancelDelegationToken(
       final Token<TimelineDelegationTokenIdentifier> timelineDT)
           throws IOException, YarnException {
-    final boolean isTokenServiceAddrEmpty =
-        timelineDT.getService().toString().isEmpty();
-    final String scheme = isTokenServiceAddrEmpty ? null
-        : (YarnConfiguration.useHttps(this.getConfig()) ? "https" : "http");
-    final InetSocketAddress address = isTokenServiceAddrEmpty ? null
-        : SecurityUtil.getTokenServiceAddr(timelineDT);
+    boolean useHttps = YarnConfiguration.useHttps(this.getConfig());
+    final String scheme = useHttps ? "https" : "http";
+    final InetSocketAddress address = SecurityUtil.getTokenServiceAddr(timelineDT);
     PrivilegedExceptionAction<Void> cancelDTAction =
         new PrivilegedExceptionAction<Void>() {
 
@@ -425,10 +416,7 @@ public class TimelineClientImpl extends TimelineClient {
             DelegationTokenAuthenticatedURL authUrl =
                 new DelegationTokenAuthenticatedURL(authenticator,
                     connConfigurator);
-            // If the token service address is not available, fall back to use
-            // the configured service address.
-            final URI serviceURI = isTokenServiceAddrEmpty ? resURI
-                : new URI(scheme, null, address.getHostName(),
+            final URI serviceURI = new URI(scheme, null, address.getHostName(),
                 address.getPort(), RESOURCE_URI_STR, null, null);
             authUrl.cancelDelegationToken(serviceURI.toURL(), token, doAsUser);
             return null;

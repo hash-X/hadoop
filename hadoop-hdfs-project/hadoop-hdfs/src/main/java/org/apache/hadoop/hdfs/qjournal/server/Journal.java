@@ -63,7 +63,6 @@ import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.StopWatch;
-import org.apache.hadoop.util.Time;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Charsets;
@@ -133,8 +132,6 @@ public class Journal implements Closeable {
 
   private final JournalMetrics metrics;
 
-  private long lastJournalTimestamp = 0;
-
   /**
    * Time threshold for sync calls, beyond which a warning should be logged to the console.
    */
@@ -154,7 +151,7 @@ public class Journal implements Closeable {
     
     EditLogFile latest = scanStorageForLatestEdits();
     if (latest != null) {
-      updateHighestWrittenTxId(latest.getLastTxId());
+      highestWrittenTxId = latest.getLastTxId();
     }
   }
 
@@ -256,11 +253,7 @@ public class Journal implements Closeable {
   synchronized long getCommittedTxnIdForTests() throws IOException {
     return committedTxnId.get();
   }
-
-  synchronized long getLastJournalTimestamp() {
-    return lastJournalTimestamp;
-  }
-
+  
   synchronized long getCurrentLagTxns() throws IOException {
     long committed = committedTxnId.get();
     if (committed == 0) {
@@ -273,17 +266,7 @@ public class Journal implements Closeable {
   synchronized long getHighestWrittenTxId() {
     return highestWrittenTxId;
   }
-
-  /**
-   * Update the highest Tx ID that has been written to the journal. Also update
-   * the {@link FileJournalManager#lastReadableTxId} of the underlying fjm.
-   * @param val The new value
-   */
-  private void updateHighestWrittenTxId(long val) {
-    highestWrittenTxId = val;
-    fjm.setLastReadableTxId(val);
-  }
-
+  
   @VisibleForTesting
   JournalMetrics getMetricsForTests() {
     return metrics;
@@ -416,9 +399,8 @@ public class Journal implements Closeable {
     metrics.bytesWritten.incr(records.length);
     metrics.txnsWritten.incr(numTxns);
     
-    updateHighestWrittenTxId(lastTxnId);
+    highestWrittenTxId = lastTxnId;
     nextTxId = lastTxnId + 1;
-    lastJournalTimestamp = Time.now();
   }
 
   public void heartbeat(RequestInfo reqInfo) throws IOException {
@@ -800,8 +782,8 @@ public class Journal implements Closeable {
             ": no current segment in place");
         
         // Update the highest txid for lag metrics
-        updateHighestWrittenTxId(Math.max(segment.getEndTxId(),
-            highestWrittenTxId));
+        highestWrittenTxId = Math.max(segment.getEndTxId(),
+            highestWrittenTxId);
       } else {
         LOG.info("Synchronizing log " + TextFormat.shortDebugString(segment) +
             ": old segment " + TextFormat.shortDebugString(currentSegment) +
@@ -830,7 +812,7 @@ public class Journal implements Closeable {
         // If we're shortening the log, update our highest txid
         // used for lag metrics.
         if (txnRange(currentSegment).containsLong(highestWrittenTxId)) {
-          updateHighestWrittenTxId(segment.getEndTxId());
+          highestWrittenTxId = segment.getEndTxId();
         }
       }
       syncedFile = syncLog(reqInfo, segment, fromUrl);

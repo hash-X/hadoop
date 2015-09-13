@@ -30,7 +30,6 @@ ResourceManager REST API's.
 * [Cluster Applications API(Submit Application)](#Cluster_Applications_APISubmit_Application)
 * [Cluster Application State API](#Cluster_Application_State_API)
 * [Cluster Application Queue API](#Cluster_Application_Queue_API)
-* [Cluster Application Priority API](#Cluster_Application_Priority_API)
 * [Cluster Delegation Tokens API](#Cluster_Delegation_Tokens_API)
 
 Overview
@@ -1381,9 +1380,7 @@ Response Body:
 	  "applicationType" : "MAPREDUCE",
 	  "applicationTags" : ""
           "memorySeconds" : 151730,
-          "vcoreSeconds" : 103,
-          "unmanagedApplication":"false"
-          "applicationPriority":0
+          "vcoreSeconds" : 103
        },
        {
           "finishedTime" : 1326815789546,
@@ -1409,9 +1406,7 @@ Response Body:
 	  "applicationTags" : "tag1"
           "memorySeconds" : 640064,
           "vcoreSeconds" : 442
-          "unmanagedApplication":"false"
-          "applicationPriority":0
-       }
+       } 
     ]
   }
 }
@@ -1460,8 +1455,6 @@ Response Body:
     <runningContainers>0</runningContainers>
     <memorySeconds>151730</memorySeconds>
     <vcoreSeconds>103</vcoreSeconds>
-    <unmanagedApplication>false</unmanagedApplication>
-    <applicationPriority>0</applicationPriority>
   </app>
   <app>
     <id>application_1326815542473_0002</id>
@@ -1487,8 +1480,6 @@ Response Body:
     <runningContainers>0</runningContainers>
     <memorySeconds>640064</memorySeconds>
     <vcoreSeconds>442</vcoreSeconds>
-    <unmanagedApplication>false</unmanagedApplication>
-    <applicationPriority>0</applicationPriority>
   </app>
 </apps>
 ```
@@ -1648,8 +1639,6 @@ Note that depending on security settings a user might not be able to see all the
 | runningContainers | int | The number of containers currently running for the application |
 | memorySeconds | long | The amount of memory the application has allocated (megabyte-seconds) |
 | vcoreSeconds | long | The amount of CPU resources the application has allocated (virtual core-seconds) |
-| unmanagedApplication | boolean | Is the application unmanaged. |
-| applicationPriority | int | priority of the submitted application |
 
 ### Response Examples
 
@@ -1689,9 +1678,7 @@ Response Body:
       "trackingUrl" : "http://host.domain.com:8088/proxy/application_1326821518301_0005/jobhistory/job/job_1326821518301_5_5",
       "queue" : "a1",
       "memorySeconds" : 151730,
-      "vcoreSeconds" : 103,
-      "unmanagedApplication":"false"
-      "applicationPriority":0
+      "vcoreSeconds" : 103
    }
 }
 ```
@@ -1733,8 +1720,6 @@ Response Body:
   <amHostHttpAddress>host.domain.com:8042</amHostHttpAddress>
   <memorySeconds>151730</memorySeconds>
   <vcoreSeconds>103</vcoreSeconds>
-  <unmanagedApplication>false</unmanagedApplication>
-  <applicationPriority>0</applicationPriority>
 </app>
 ```
 
@@ -2770,125 +2755,6 @@ Response Body:
     <appqueue>
       <queue>test</queue>
     </appqueue>
-
-Cluster Application Priority API
------------------------------
-
-With the application priority API, you can query the priority of a submitted app as well update priority of a running or accepted app using a PUT request specifying the target priority. To perform the PUT operation, authentication has to be setup for the RM web services. In addition, you must be authorized to update the app priority. Currently you can only update the app priority if you're using the Capacity scheduler.
-
-Please note that in order to update priority of an app, you must have an authentication filter setup for the HTTP interface. The functionality requires that a username is set in the HttpServletRequest. If no filter is setup, the response will be an "UNAUTHORIZED" response.
-
-This feature is currently in the alpha stage and may change in the future.
-
-### URI
-
-      * http://<rm http address:port>/ws/v1/cluster/apps/{appid}/priority
-
-### HTTP Operations Supported
-
-      * GET
-      * PUT
-
-### Query Parameters Supported
-
-      None
-
-### Elements of *apppriority* object
-
-When you make a request for the state of an app, the information returned has the following fields
-
-| Item | Data Type | Description |
-|:---- |:---- |:---- |
-| priority | int | The application priority |
-
-### Response Examples
-
-**JSON responses**
-
-HTTP Request
-
-      GET http://<rm http address:port>/ws/v1/cluster/apps/application_1399397633663_0003/priority
-
-Response Header:
-
-    HTTP/1.1 200 OK
-    Content-Type: application/json
-    Transfer-Encoding: chunked
-    Server: Jetty(6.1.26)
-
-Response Body:
-
-    {
-      "priority":0
-    }
-
-HTTP Request
-
-      PUT http://<rm http address:port>/ws/v1/cluster/apps/application_1399397633663_0003/priority
-
-Request Body:
-
-    {
-      "priority":8
-    }
-
-Response Header:
-
-    HTTP/1.1 200 OK
-    Content-Type: application/json
-    Transfer-Encoding: chunked
-    Server: Jetty(6.1.26)
-
-Response Body:
-
-    {
-      "priority":8
-    }
-
-**XML responses**
-
-HTTP Request
-
-      GET http://<rm http address:port>/ws/v1/cluster/apps/application_1399397633663_0003/priority
-
-Response Header:
-
-    HTTP/1.1 200 OK
-    Content-Type: application/xml
-    Content-Length: 98
-    Server: Jetty(6.1.26)
-
-Response Body:
-
-    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <applicationpriority>
-      <priority>0</priority>
-    </applicationpriority>
-
-HTTP Request
-
-      PUT http://<rm http address:port>/ws/v1/cluster/apps/application_1399397633663_0003/priority
-
-Request Body:
-
-    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <applicationpriority>
-      <priority>8</priority>
-    </applicationpriority>
-
-Response Header:
-
-    HTTP/1.1 200 OK
-    Content-Type: application/xml
-    Content-Length: 95
-    Server: Jetty(6.1.26)
-
-Response Body:
-
-    <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <applicationpriority>
-      <priority>8</priority>
-    </applicationpriority>
 
 Cluster Delegation Tokens API
 -----------------------------

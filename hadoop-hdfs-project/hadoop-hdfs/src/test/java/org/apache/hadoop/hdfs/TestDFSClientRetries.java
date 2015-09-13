@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs;
 
-import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -31,7 +31,6 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.when;
 
 import java.io.FileNotFoundException;
@@ -63,7 +62,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
-import org.apache.hadoop.hdfs.client.impl.LeaseRenewer;
 import org.apache.hadoop.hdfs.client.HdfsUtils;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.ClientDatanodeProtocol;
@@ -177,11 +175,11 @@ public class TestDFSClientRetries {
                                                   InterruptedException { 
     final int writeTimeout = 100; //milliseconds.
     // set a very short write timeout for datanode, so that tests runs fast.
-    conf.setInt(HdfsClientConfigKeys.DFS_DATANODE_SOCKET_WRITE_TIMEOUT_KEY, writeTimeout);
+    conf.setInt(DFSConfigKeys.DFS_DATANODE_SOCKET_WRITE_TIMEOUT_KEY, writeTimeout); 
     // set a smaller block size
     final int blockSize = 10*1024*1024;
     conf.setInt(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, blockSize);
-    conf.setInt(HdfsClientConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY, 1);
+    conf.setInt(DFSConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY, 1);
     // set a small buffer size
     final int bufferSize = 4096;
     conf.setInt(CommonConfigurationKeys.IO_FILE_BUFFER_SIZE_KEY, bufferSize);
@@ -257,12 +255,12 @@ public class TestDFSClientRetries {
     Mockito.doReturn(
             new HdfsFileStatus(0, false, 1, 1024, 0, 0, new FsPermission(
                 (short) 777), "owner", "group", new byte[0], new byte[0],
-                1010, 0, null, (byte) 0)).when(mockNN).getFileInfo(anyString());
+                1010, 0, null, (byte) 0, null)).when(mockNN).getFileInfo(anyString());
     
     Mockito.doReturn(
             new HdfsFileStatus(0, false, 1, 1024, 0, 0, new FsPermission(
                 (short) 777), "owner", "group", new byte[0], new byte[0],
-                1010, 0, null, (byte) 0))
+                1010, 0, null, (byte) 0, null))
         .when(mockNN)
         .create(anyString(), (FsPermission) anyObject(), anyString(),
             (EnumSetWritable<CreateFlag>) anyObject(), anyBoolean(),
@@ -356,59 +354,7 @@ public class TestDFSClientRetries {
       cluster.shutdown();
     }
   }
-
-  /**
-   * Test DFSClient can continue to function after renewLease RPC
-   * receives SocketTimeoutException.
-   */
-  @Test
-  public void testLeaseRenewSocketTimeout() throws Exception
-  {
-    String file1 = "/testFile1";
-    String file2 = "/testFile2";
-    // Set short retry timeouts so this test runs faster
-    conf.setInt(DFSConfigKeys.DFS_CLIENT_RETRY_WINDOW_BASE, 10);
-    conf.setInt(DFS_CLIENT_SOCKET_TIMEOUT_KEY, 2 * 1000);
-    MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf).build();
-    try {
-      cluster.waitActive();
-      NamenodeProtocols spyNN = spy(cluster.getNameNodeRpc());
-      Mockito.doThrow(new SocketTimeoutException()).when(spyNN).renewLease(
-          Mockito.anyString());
-      DFSClient client = new DFSClient(null, spyNN, conf, null);
-      // Get hold of the lease renewer instance used by the client
-      LeaseRenewer leaseRenewer = client.getLeaseRenewer();
-      leaseRenewer.setRenewalTime(100);
-      OutputStream out1 = client.create(file1, false);
-
-      Mockito.verify(spyNN, timeout(10000).times(1)).renewLease(
-          Mockito.anyString());
-      verifyEmptyLease(leaseRenewer);
-      try {
-        out1.write(new byte[256]);
-        fail("existing output stream should be aborted");
-      } catch (IOException e) {
-      }
-
-      // Verify DFSClient can do read operation after renewLease aborted.
-      client.exists(file2);
-      // Verify DFSClient can do write operation after renewLease no longer
-      // throws SocketTimeoutException.
-      Mockito.doNothing().when(spyNN).renewLease(
-          Mockito.anyString());
-      leaseRenewer = client.getLeaseRenewer();
-      leaseRenewer.setRenewalTime(100);
-      OutputStream out2 = client.create(file2, false);
-      Mockito.verify(spyNN, timeout(10000).times(2)).renewLease(
-          Mockito.anyString());
-      out2.write(new byte[256]);
-      out2.close();
-      verifyEmptyLease(leaseRenewer);
-    } finally {
-      cluster.shutdown();
-    }
-  }
-
+  
   /**
    * Test that getAdditionalBlock() and close() are idempotent. This allows
    * a client to safely retry a call and still produce a correct
@@ -550,7 +496,7 @@ public class TestDFSClientRetries {
       badBlocks.add(badLocatedBlock);
       return new LocatedBlocks(goodBlockList.getFileLength(), false,
                                badBlocks, null, true,
-                               null);
+                               null, null);
     }
   }
   
@@ -643,7 +589,7 @@ public class TestDFSClientRetries {
       DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_DEFAULT);
     conf.setInt(DFSConfigKeys.DFS_DATANODE_MAX_RECEIVER_THREADS_KEY,
       xcievers);
-    conf.setInt(HdfsClientConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY,
+    conf.setInt(DFSConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY,
       retries);
     conf.setInt(HdfsClientConfigKeys.Retry.WINDOW_BASE_KEY, timeWin);
     // Disable keepalive
@@ -727,15 +673,7 @@ public class TestDFSClientRetries {
     }
     return ret;
   }
-
-  private void verifyEmptyLease(LeaseRenewer leaseRenewer) throws Exception {
-    int sleepCount = 0;
-    while (!leaseRenewer.isEmpty() && sleepCount++ < 20) {
-      Thread.sleep(500);
-    }
-    assertTrue("Lease should be empty.", leaseRenewer.isEmpty());
-  }
-
+  
   class DFSClientReader implements Runnable {
     
     DFSClient client;
@@ -860,7 +798,7 @@ public class TestDFSClientRetries {
     ClientDatanodeProtocol proxy = null;
 
     try {
-      proxy = DFSUtilClient.createClientDatanodeProtocolProxy(
+      proxy = DFSUtil.createClientDatanodeProtocolProxy(
           fakeDnId, conf, 500, false, fakeBlock);
 
       proxy.getReplicaVisibleLength(new ExtendedBlock("bpid", 1));

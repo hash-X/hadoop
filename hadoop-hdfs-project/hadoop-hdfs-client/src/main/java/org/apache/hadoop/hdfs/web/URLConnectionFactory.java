@@ -28,17 +28,16 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocketFactory;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.web.oauth2.OAuth2ConnectionConfigurator;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authentication.client.AuthenticatedURL;
 import org.apache.hadoop.security.authentication.client.AuthenticationException;
 import org.apache.hadoop.security.authentication.client.ConnectionConfigurator;
 import org.apache.hadoop.security.ssl.SSLFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -48,8 +47,7 @@ import com.google.common.annotations.VisibleForTesting;
 @InterfaceAudience.LimitedPrivate({ "HDFS" })
 @InterfaceStability.Unstable
 public class URLConnectionFactory {
-  private static final Logger LOG = LoggerFactory
-      .getLogger(URLConnectionFactory.class);
+  private static final Log LOG = LogFactory.getLog(URLConnectionFactory.class);
 
   /**
    * Timeout for socket connects and reads
@@ -78,41 +76,14 @@ public class URLConnectionFactory {
    * try to load SSL certificates when it is specified.
    */
   public static URLConnectionFactory newDefaultURLConnectionFactory(Configuration conf) {
-    ConnectionConfigurator conn = getSSLConnectionConfiguration(conf);
-
-    return new URLConnectionFactory(conn);
-  }
-
-  private static ConnectionConfigurator
-      getSSLConnectionConfiguration(Configuration conf) {
     ConnectionConfigurator conn = null;
     try {
       conn = newSslConnConfigurator(DEFAULT_SOCKET_TIMEOUT, conf);
     } catch (Exception e) {
       LOG.debug(
-          "Cannot load customized ssl related configuration. Fallback to" +
-              " system-generic settings.",
+          "Cannot load customized ssl related configuration. Fallback to system-generic settings.",
           e);
       conn = DEFAULT_TIMEOUT_CONN_CONFIGURATOR;
-    }
-
-    return conn;
-  }
-
-  /**
-   * Construct a new URLConnectionFactory that supports OAut-based connections.
-   * It will also try to load the SSL configuration when they are specified.
-   */
-  public static URLConnectionFactory
-      newOAuth2URLConnectionFactory(Configuration conf) throws IOException {
-    ConnectionConfigurator conn = null;
-    try {
-      ConnectionConfigurator sslConnConfigurator
-          = newSslConnConfigurator(DEFAULT_SOCKET_TIMEOUT, conf);
-
-      conn = new OAuth2ConnectionConfigurator(conf, sslConnConfigurator);
-    } catch (Exception e) {
-      throw new IOException("Unable to load OAuth2 connection factory.", e);
     }
     return new URLConnectionFactory(conn);
   }
@@ -183,14 +154,16 @@ public class URLConnectionFactory {
       throws IOException, AuthenticationException {
     if (isSpnego) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("open AuthenticatedURL connection {}", url);
+        LOG.debug("open AuthenticatedURL connection" + url);
       }
       UserGroupInformation.getCurrentUser().checkTGTAndReloginFromKeytab();
       final AuthenticatedURL.Token authToken = new AuthenticatedURL.Token();
       return new AuthenticatedURL(new KerberosUgiAuthenticator(),
           connConfigurator).openConnection(url, authToken);
     } else {
-      LOG.debug("open URL connection");
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("open URL connection");
+      }
       URLConnection connection = url.openConnection();
       if (connection instanceof HttpURLConnection) {
         connConfigurator.configure((HttpURLConnection) connection);

@@ -25,8 +25,6 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.logging.Log;
@@ -263,15 +261,4 @@ public class DFSZKFailoverController extends ZKFailoverController {
     return isThreadDumpCaptured;
   }
 
-  @Override
-  public List<HAServiceTarget> getAllOtherNodes() {
-    String nsId = DFSUtil.getNamenodeNameServiceId(conf);
-    List<String> otherNn = HAUtil.getNameNodeIdOfOtherNodes(conf, nsId);
-
-    List<HAServiceTarget> targets = new ArrayList<HAServiceTarget>(otherNn.size());
-    for (String nnId : otherNn) {
-      targets.add(new NNHAServiceTarget(conf, nsId, nnId));
-    }
-    return targets;
-  }
 }

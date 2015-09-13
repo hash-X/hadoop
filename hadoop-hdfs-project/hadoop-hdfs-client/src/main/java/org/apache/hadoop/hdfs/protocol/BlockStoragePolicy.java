@@ -158,11 +158,13 @@ public class BlockStoragePolicy implements BlockStoragePolicySpi {
     // remove excess storage types after fallback replacement.
     diff(storageTypes, excess, null);
     if (storageTypes.size() < expectedSize) {
-      LOG.warn("Failed to place enough replicas: expected size is {}"
-          + " but only {} storage types can be selected (replication={},"
-          + " selected={}, unavailable={}" + ", removed={}" + ", policy={}"
-          + ")", expectedSize, storageTypes.size(), replication, storageTypes,
-          unavailables, removed, this);
+      LOG.warn("Failed to place enough replicas: expected size is " + expectedSize
+          + " but only " + storageTypes.size() + " storage types can be selected "
+          + "(replication=" + replication
+          + ", selected=" + storageTypes
+          + ", unavailable=" + unavailables
+          + ", removed=" + removed
+          + ", policy=" + this + ")");
     }
     return storageTypes;
   }

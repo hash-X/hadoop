@@ -31,33 +31,14 @@ import org.apache.hadoop.classification.InterfaceAudience;
  */
 @InterfaceAudience.Private
 public class BlockReportContext {
-  /**
-   * The total number of RPCs contained in the block report.
-   */
   private final int totalRpcs;
-
-  /**
-   * The index of this particular RPC.
-   */
   private final int curRpc;
-
-  /**
-   * A 64-bit ID which identifies the block report as a whole.
-   */
   private final long reportId;
 
-  /**
-   * The lease ID which this block report is using, or 0 if this block report is
-   * bypassing rate-limiting.
-   */
-  private final long leaseId;
-
-  public BlockReportContext(int totalRpcs, int curRpc,
-                            long reportId, long leaseId) {
+  public BlockReportContext(int totalRpcs, int curRpc, long reportId) {
     this.totalRpcs = totalRpcs;
     this.curRpc = curRpc;
     this.reportId = reportId;
-    this.leaseId = leaseId;
   }
 
   public int getTotalRpcs() {
@@ -70,9 +51,5 @@ public class BlockReportContext {
 
   public long getReportId() {
     return reportId;
-  }
-
-  public long getLeaseId() {
-    return leaseId;
   }
 }

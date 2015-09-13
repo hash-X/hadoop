@@ -85,13 +85,6 @@ public class CommonConfigurationKeysPublic {
   /** Default value for FS_TRASH_CHECKPOINT_INTERVAL_KEY */
   public static final long    FS_TRASH_CHECKPOINT_INTERVAL_DEFAULT = 0;
 
-  /**
-   * Directories that cannot be removed unless empty, even by an
-   * administrator.
-   */
-  public static final String FS_PROTECTED_DIRECTORIES =
-      "fs.protected.directories";
-
   // TBD: Code is still using hardcoded values (e.g. "fs.automatic.close")
   // instead of constant (e.g. FS_AUTOMATIC_CLOSE_KEY)
   //
@@ -242,11 +235,6 @@ public class CommonConfigurationKeysPublic {
   /** Default value for IPC_SERVER_MAX_CONNECTIONS_KEY */
   public static final int     IPC_SERVER_MAX_CONNECTIONS_DEFAULT = 0;
 
-  /** Logs if a RPC is really slow compared to rest of RPCs. */
-  public static final String IPC_SERVER_LOG_SLOW_RPC =
-                                                "ipc.server.log.slow.rpc";
-  public static final boolean IPC_SERVER_LOG_SLOW_RPC_DEFAULT = false;
-
   /** See <a href="{@docRoot}/../core-default.html">core-default.xml</a> */
   public static final String  HADOOP_RPC_SOCKET_FACTORY_CLASS_DEFAULT_KEY =
     "hadoop.rpc.socket.factory.class.default";
@@ -375,17 +363,5 @@ public class CommonConfigurationKeysPublic {
     "hadoop.security.random.device.file.path";
   public static final String HADOOP_SECURITY_SECURE_RANDOM_DEVICE_FILE_PATH_DEFAULT = 
     "/dev/urandom";
-
-  /** See <a href="{@docRoot}/../core-default.html">core-default.xml</a> */
-  public static final String HADOOP_SHELL_MISSING_DEFAULT_FS_WARNING_KEY =
-      "hadoop.shell.missing.defaultFs.warning";
-  public static final boolean HADOOP_SHELL_MISSING_DEFAULT_FS_WARNING_DEFAULT =
-      false;
-
-  /** See <a href="{@docRoot}/../core-default.html">core-default.xml</a> */
-  public static final String HADOOP_SHELL_SAFELY_DELETE_LIMIT_NUM_FILES =
-      "hadoop.shell.safely.delete.limit.num.files";
-  public static final long HADOOP_SHELL_SAFELY_DELETE_LIMIT_NUM_FILES_DEFAULT =
-      100;
 }
 

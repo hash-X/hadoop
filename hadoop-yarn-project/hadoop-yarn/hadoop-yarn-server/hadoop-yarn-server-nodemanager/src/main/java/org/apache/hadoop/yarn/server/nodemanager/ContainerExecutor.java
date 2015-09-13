@@ -24,10 +24,8 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -41,14 +39,12 @@ import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
-import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerDiagnosticsUpdateEvent;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.launcher.ContainerLaunch;
-import org.apache.hadoop.yarn.server.nodemanager.util.NodeManagerHardwareUtils;
 import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerLivenessContext;
 import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerReacquisitionContext;
 import org.apache.hadoop.yarn.server.nodemanager.executor.ContainerSignalContext;
@@ -163,7 +159,7 @@ public abstract class ContainerExecutor implements Configurable {
    * @return true if container is still alive
    * @throws IOException
    */
-  public abstract boolean isContainerAlive(ContainerLivenessContext ctx)
+  public abstract boolean isContainerProcessAlive(ContainerLivenessContext ctx)
       throws IOException;
 
   /**
@@ -177,7 +173,6 @@ public abstract class ContainerExecutor implements Configurable {
    */
   public int reacquireContainer(ContainerReacquisitionContext ctx)
       throws IOException, InterruptedException {
-    Container container = ctx.getContainer();
     String user = ctx.getUser();
     ContainerId containerId = ctx.getContainerId();
 
@@ -197,11 +192,10 @@ public abstract class ContainerExecutor implements Configurable {
     LOG.info("Reacquiring " + containerId + " with pid " + pid);
     ContainerLivenessContext livenessContext = new ContainerLivenessContext
         .Builder()
-        .setContainer(container)
         .setUser(user)
         .setPid(pid)
         .build();
-    while(isContainerAlive(livenessContext)) {
+    while(isContainerProcessAlive(livenessContext)) {
       Thread.sleep(1000);
     }
 
@@ -248,20 +242,9 @@ public abstract class ContainerExecutor implements Configurable {
     Map<Path, List<String>> resources, List<String> command) throws IOException{
     ContainerLaunch.ShellScriptBuilder sb =
       ContainerLaunch.ShellScriptBuilder.create();
-    Set<String> whitelist = new HashSet<String>();
-    whitelist.add(YarnConfiguration.NM_DOCKER_CONTAINER_EXECUTOR_IMAGE_NAME);
-    whitelist.add(ApplicationConstants.Environment.HADOOP_YARN_HOME.name());
-    whitelist.add(ApplicationConstants.Environment.HADOOP_COMMON_HOME.name());
-    whitelist.add(ApplicationConstants.Environment.HADOOP_HDFS_HOME.name());
-    whitelist.add(ApplicationConstants.Environment.HADOOP_CONF_DIR.name());
-    whitelist.add(ApplicationConstants.Environment.JAVA_HOME.name());
     if (environment != null) {
       for (Map.Entry<String,String> env : environment.entrySet()) {
-        if (!whitelist.contains(env.getKey())) {
-          sb.env(env.getKey().toString(), env.getValue().toString());
-        } else {
-          sb.whitelistedEnv(env.getKey().toString(), env.getValue().toString());
-        }
+        sb.env(env.getKey().toString(), env.getValue().toString());
       }
     }
     if (resources != null) {
@@ -389,16 +372,28 @@ public abstract class ContainerExecutor implements Configurable {
             YarnConfiguration.NM_WINDOWS_CONTAINER_CPU_LIMIT_ENABLED,
             YarnConfiguration.DEFAULT_NM_WINDOWS_CONTAINER_CPU_LIMIT_ENABLED)) {
           int containerVCores = resource.getVirtualCores();
-          int nodeVCores = NodeManagerHardwareUtils.getVCores(conf);
-          int nodeCpuPercentage =
-              NodeManagerHardwareUtils.getNodeCpuPercentage(conf);
-
-          float containerCpuPercentage =
-              (float) (nodeCpuPercentage * containerVCores) / nodeVCores;
-
+          int nodeVCores = conf.getInt(YarnConfiguration.NM_VCORES,
+              YarnConfiguration.DEFAULT_NM_VCORES);
+          // cap overall usage to the number of cores allocated to YARN
+          int nodeCpuPercentage = Math
+              .min(
+                  conf.getInt(
+                      YarnConfiguration.NM_RESOURCE_PERCENTAGE_PHYSICAL_CPU_LIMIT,
+                      YarnConfiguration.DEFAULT_NM_RESOURCE_PERCENTAGE_PHYSICAL_CPU_LIMIT),
+                  100);
+          nodeCpuPercentage = Math.max(0, nodeCpuPercentage);
+          if (nodeCpuPercentage == 0) {
+            String message = "Illegal value for "
+                + YarnConfiguration.NM_RESOURCE_PERCENTAGE_PHYSICAL_CPU_LIMIT
+                + ". Value cannot be less than or equal to 0.";
+            throw new IllegalArgumentException(message);
+          }
+          float yarnVCores = (nodeCpuPercentage * nodeVCores) / 100.0f;
           // CPU should be set to a percentage * 100, e.g. 20% cpu rate limit
-          // should be set as 20 * 100.
-          cpuRate = Math.min(10000, (int) (containerCpuPercentage * 100));
+          // should be set as 20 * 100. The following setting is equal to:
+          // 100 * (100 * (vcores / Total # of cores allocated to YARN))
+          cpuRate = Math.min(10000,
+              (int) ((containerVCores * 10000) / yarnVCores));
         }
       }
       return new String[] { Shell.WINUTILS, "task", "create", "-m",
@@ -508,7 +503,6 @@ public abstract class ContainerExecutor implements Configurable {
       try {
         Thread.sleep(delay);
         containerExecutor.signalContainer(new ContainerSignalContext.Builder()
-            .setContainer(container)
             .setUser(user)
             .setPid(pid)
             .setSignal(signal)

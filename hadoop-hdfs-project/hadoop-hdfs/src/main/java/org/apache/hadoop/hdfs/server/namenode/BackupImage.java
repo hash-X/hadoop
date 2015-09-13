@@ -82,8 +82,6 @@ public class BackupImage extends FSImage {
   
   private FSNamesystem namesystem;
 
-  private int quotaInitThreads;
-
   /**
    * Construct a backup image.
    * @param conf Configuration
@@ -218,7 +216,9 @@ public class BackupImage extends FSImage {
       }
       lastAppliedTxId = logLoader.getLastAppliedTxId();
 
-      getNamesystem().dir.updateCountForQuota();
+      FSImage.updateCountForQuota(
+          getNamesystem().dir.getBlockStoragePolicySuite(),
+          getNamesystem().dir.rootDir); // inefficient!
     } finally {
       backupInputStream.clear();
     }
@@ -333,7 +333,7 @@ public class BackupImage extends FSImage {
    * directories.
    */
   synchronized void namenodeStartedLogSegment(long txid) throws IOException {
-    editLog.startLogSegment(txid, true, namesystem.getEffectiveLayoutVersion());
+    editLog.startLogSegment(txid, true);
 
     if (bnState == BNState.DROP_UNTIL_NEXT_ROLL) {
       setState(BNState.JOURNAL_ONLY);

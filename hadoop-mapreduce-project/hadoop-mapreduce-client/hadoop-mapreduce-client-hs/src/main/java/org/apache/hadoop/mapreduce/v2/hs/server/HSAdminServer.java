@@ -20,7 +20,6 @@ package org.apache.hadoop.mapreduce.v2.hs.server;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.security.PrivilegedExceptionAction;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -53,7 +52,6 @@ import org.apache.hadoop.mapreduce.v2.hs.JobHistory;
 import org.apache.hadoop.mapreduce.v2.hs.proto.HSAdminRefreshProtocolProtos.HSAdminRefreshProtocolService;
 import org.apache.hadoop.mapreduce.v2.hs.protocolPB.HSAdminRefreshProtocolServerSideTranslatorPB;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.BlockingService;
 
 @Private
@@ -68,8 +66,6 @@ public class HSAdminServer extends AbstractService implements HSAdminProtocol {
   protected InetSocketAddress clientRpcAddress;
   private static final String HISTORY_ADMIN_SERVER = "HSAdminServer";
   private JobHistory jobHistoryService = null;
-
-  private UserGroupInformation loginUGI;
 
   public HSAdminServer(AggregatedLogDeletionService aggLogDelService,
       JobHistory jobHistoryService) {
@@ -129,22 +125,7 @@ public class HSAdminServer extends AbstractService implements HSAdminProtocol {
 
   @Override
   protected void serviceStart() throws Exception {
-    if (UserGroupInformation.isSecurityEnabled()) {
-      loginUGI = UserGroupInformation.getLoginUser();
-    } else {
-      loginUGI = UserGroupInformation.getCurrentUser();
-    }
     clientRpcServer.start();
-  }
-
-  @VisibleForTesting
-  UserGroupInformation getLoginUGI() {
-    return loginUGI;
-  }
-
-  @VisibleForTesting
-  void setLoginUGI(UserGroupInformation ugi) {
-    loginUGI = ugi;
   }
 
   @Override
@@ -252,17 +233,7 @@ public class HSAdminServer extends AbstractService implements HSAdminProtocol {
   public void refreshLogRetentionSettings() throws IOException {
     UserGroupInformation user = checkAcls("refreshLogRetentionSettings");
 
-    try {
-      loginUGI.doAs(new PrivilegedExceptionAction<Void>() {
-        @Override
-        public Void run() throws IOException {
-          aggLogDelService.refreshLogRetentionSettings();
-          return null;
-        }
-      });
-    } catch (InterruptedException e) {
-      throw new IOException(e);
-    }
+    aggLogDelService.refreshLogRetentionSettings();
 
     HSAuditLogger.logSuccess(user.getShortUserName(),
         "refreshLogRetentionSettings", "HSAdminServer");
@@ -272,17 +243,7 @@ public class HSAdminServer extends AbstractService implements HSAdminProtocol {
   public void refreshJobRetentionSettings() throws IOException {
     UserGroupInformation user = checkAcls("refreshJobRetentionSettings");
 
-    try {
-      loginUGI.doAs(new PrivilegedExceptionAction<Void>() {
-        @Override
-        public Void run() throws IOException {
-          jobHistoryService.refreshJobRetentionSettings();
-          return null;
-        }
-      });
-    } catch (InterruptedException e) {
-      throw new IOException(e);
-    }
+    jobHistoryService.refreshJobRetentionSettings();
 
     HSAuditLogger.logSuccess(user.getShortUserName(),
         "refreshJobRetentionSettings", HISTORY_ADMIN_SERVER);

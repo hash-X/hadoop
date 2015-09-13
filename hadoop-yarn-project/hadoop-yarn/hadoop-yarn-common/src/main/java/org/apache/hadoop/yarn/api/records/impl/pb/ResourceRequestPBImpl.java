@@ -184,8 +184,7 @@ public class ResourceRequestPBImpl extends  ResourceRequest {
     return "{Priority: " + getPriority() + ", Capability: " + getCapability()
         + ", # Containers: " + getNumContainers()
         + ", Location: " + getResourceName()
-        + ", Relax Locality: " + getRelaxLocality()
-        + ", Node Label Expression: " + getNodeLabelExpression() + "}";
+        + ", Relax Locality: " + getRelaxLocality() + "}";
   }
 
   @Override
@@ -194,7 +193,7 @@ public class ResourceRequestPBImpl extends  ResourceRequest {
     if (!p.hasNodeLabelExpression()) {
       return null;
     }
-    return (p.getNodeLabelExpression().trim());
+    return (p.getNodeLabelExpression());
   }
 
   @Override

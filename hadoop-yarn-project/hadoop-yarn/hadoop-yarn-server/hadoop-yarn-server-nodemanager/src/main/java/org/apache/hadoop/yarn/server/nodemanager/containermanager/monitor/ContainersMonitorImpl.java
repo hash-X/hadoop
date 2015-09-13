@@ -35,7 +35,6 @@ import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.conf.YarnConfiguration;
 import org.apache.hadoop.yarn.event.AsyncDispatcher;
 import org.apache.hadoop.yarn.event.Dispatcher;
-import org.apache.hadoop.yarn.server.api.records.ResourceUtilization;
 import org.apache.hadoop.yarn.server.nodemanager.ContainerExecutor;
 import org.apache.hadoop.yarn.server.nodemanager.Context;
 import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.ContainerKillEvent;
@@ -73,14 +72,11 @@ public class ContainersMonitorImpl extends AbstractService implements
 
   private boolean pmemCheckEnabled;
   private boolean vmemCheckEnabled;
-  private boolean containersMonitorEnabled;
 
   private long maxVCoresAllottedForContainers;
 
   private static final long UNKNOWN_MEMORY_LIMIT = -1L;
   private int nodeCpuPercentageForYARN;
-
-  private ResourceUtilization containersUtilization;
 
   public ContainersMonitorImpl(ContainerExecutor exec,
       AsyncDispatcher dispatcher, Context context) {
@@ -93,22 +89,16 @@ public class ContainersMonitorImpl extends AbstractService implements
     this.containersToBeAdded = new HashMap<ContainerId, ProcessTreeInfo>();
     this.containersToBeRemoved = new ArrayList<ContainerId>();
     this.monitoringThread = new MonitoringThread();
-
-    this.containersUtilization = ResourceUtilization.newInstance(0, 0, 0.0f);
   }
 
   @Override
   protected void serviceInit(Configuration conf) throws Exception {
     this.monitoringInterval =
         conf.getLong(YarnConfiguration.NM_CONTAINER_MON_INTERVAL_MS,
-            conf.getLong(YarnConfiguration.NM_RESOURCE_MON_INTERVAL_MS,
-                YarnConfiguration.DEFAULT_NM_RESOURCE_MON_INTERVAL_MS));
+            YarnConfiguration.DEFAULT_NM_CONTAINER_MON_INTERVAL_MS);
 
     Class<? extends ResourceCalculatorPlugin> clazz =
-        conf.getClass(YarnConfiguration.NM_CONTAINER_MON_RESOURCE_CALCULATOR,
-            conf.getClass(
-                YarnConfiguration.NM_MON_RESOURCE_CALCULATOR, null,
-                ResourceCalculatorPlugin.class),
+        conf.getClass(YarnConfiguration.NM_CONTAINER_MON_RESOURCE_CALCULATOR, null,
             ResourceCalculatorPlugin.class);
     this.resourceCalculatorPlugin =
         ResourceCalculatorPlugin.getResourceCalculatorPlugin(clazz, conf);
@@ -127,11 +117,14 @@ public class ContainersMonitorImpl extends AbstractService implements
         conf.getLong(YarnConfiguration.NM_CONTAINER_METRICS_PERIOD_MS,
             YarnConfiguration.DEFAULT_NM_CONTAINER_METRICS_PERIOD_MS);
 
-    long configuredPMemForContainers =
-        NodeManagerHardwareUtils.getContainerMemoryMB(conf) * 1024 * 1024L;
+    long configuredPMemForContainers = conf.getLong(
+        YarnConfiguration.NM_PMEM_MB,
+        YarnConfiguration.DEFAULT_NM_PMEM_MB) * 1024 * 1024l;
 
-    long configuredVCoresForContainers =
-        NodeManagerHardwareUtils.getVCores(conf);
+    long configuredVCoresForContainers = conf.getLong(
+        YarnConfiguration.NM_VCORES,
+        YarnConfiguration.DEFAULT_NM_VCORES);
+
 
     // Setting these irrespective of whether checks are enabled. Required in
     // the UI.
@@ -153,9 +146,6 @@ public class ContainersMonitorImpl extends AbstractService implements
         YarnConfiguration.DEFAULT_NM_VMEM_CHECK_ENABLED);
     LOG.info("Physical memory check enabled: " + pmemCheckEnabled);
     LOG.info("Virtual memory check enabled: " + vmemCheckEnabled);
-
-    containersMonitorEnabled = isEnabled();
-    LOG.info("ContainersMonitor enabled: " + containersMonitorEnabled);
 
     nodeCpuPercentageForYARN =
         NodeManagerHardwareUtils.getNodeCpuPercentage(conf);
@@ -209,7 +199,7 @@ public class ContainersMonitorImpl extends AbstractService implements
 
   @Override
   protected void serviceStart() throws Exception {
-    if (containersMonitorEnabled) {
+    if (this.isEnabled()) {
       this.monitoringThread.start();
     }
     super.serviceStart();
@@ -217,7 +207,7 @@ public class ContainersMonitorImpl extends AbstractService implements
 
   @Override
   protected void serviceStop() throws Exception {
-    if (containersMonitorEnabled) {
+    if (this.isEnabled()) {
       this.monitoringThread.interrupt();
       try {
         this.monitoringThread.join();
@@ -397,11 +387,6 @@ public class ContainersMonitorImpl extends AbstractService implements
           containersToBeRemoved.clear();
         }
 
-        // Temporary structure to calculate the total resource utilization of
-        // the containers
-        ResourceUtilization trackedContainersUtilization  =
-            ResourceUtilization.newInstance(0, 0, 0.0f);
-
         // Now do the monitoring for the trackingContainers
         // Check memory usage and kill any overflowing containers
         long vmemUsageByAllContainers = 0;
@@ -480,12 +465,6 @@ public class ContainersMonitorImpl extends AbstractService implements
                       currentVmemUsage, vmemLimit,
                       currentPmemUsage, pmemLimit));
             }
-
-            // Add resource utilization for this container
-            trackedContainersUtilization.addTo(
-                (int) (currentPmemUsage >> 20),
-                (int) (currentVmemUsage >> 20),
-                milliVcoresUsed / 1000.0f);
 
             // Add usage to container metrics
             if (containerMetricsEnabled) {
@@ -566,9 +545,6 @@ public class ContainersMonitorImpl extends AbstractService implements
               + cpuUsagePercentPerCoreByAllContainers);
         }
 
-        // Save the aggregated utilization of the containers
-        setContainersUtilization(trackedContainersUtilization);
-
         try {
           Thread.sleep(monitoringInterval);
         } catch (InterruptedException e) {
@@ -641,18 +617,9 @@ public class ContainersMonitorImpl extends AbstractService implements
   }
 
   @Override
-  public ResourceUtilization getContainersUtilization() {
-    return this.containersUtilization;
-  }
-
-  public void setContainersUtilization(ResourceUtilization utilization) {
-    this.containersUtilization = utilization;
-  }
-
-  @Override
   public void handle(ContainersMonitorEvent monitoringEvent) {
 
-    if (!containersMonitorEnabled) {
+    if (!isEnabled()) {
       return;
     }
 

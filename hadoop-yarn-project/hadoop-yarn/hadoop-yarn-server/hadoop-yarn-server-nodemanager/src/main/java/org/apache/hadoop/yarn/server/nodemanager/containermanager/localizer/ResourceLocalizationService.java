@@ -51,7 +51,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
@@ -229,7 +228,7 @@ public class ResourceLocalizationService extends CompositeService
   public void serviceInit(Configuration conf) throws Exception {
     this.validateConf(conf);
     this.publicRsrc = new LocalResourcesTrackerImpl(null, null, dispatcher,
-        true, conf, stateStore, dirsHandler);
+        true, conf, stateStore);
     this.recordFactory = RecordFactoryProvider.getRecordFactory(conf);
 
     try {
@@ -1209,7 +1208,7 @@ public class ResourceLocalizationService extends CompositeService
         if (LOG.isDebugEnabled()) {
           for (Token<? extends TokenIdentifier> tk : credentials
               .getAllTokens()) {
-            LOG.debug(tk + " : " + buildTokenFingerprint(tk));
+            LOG.debug(tk.getService() + " : " + tk.encodeToUrlString());
           }
         }
         if (UserGroupInformation.isSecurityEnabled()) {
@@ -1227,32 +1226,6 @@ public class ResourceLocalizationService extends CompositeService
       }
     }
 
-  }
-
-  /**
-   * Returns a fingerprint of a token.  The fingerprint is suitable for use in
-   * logging, because it cannot be used to determine the secret.  The
-   * fingerprint is built using the first 10 bytes of a SHA-256 hash of the
-   * string encoding of the token.  The returned string contains the hex
-   * representation of each byte, delimited by a space.
-   *
-   * @param tk token
-   * @return token fingerprint
-   * @throws IOException if there is an I/O error
-   */
-  @VisibleForTesting
-  static String buildTokenFingerprint(Token<? extends TokenIdentifier> tk)
-      throws IOException {
-    char[] digest = DigestUtils.sha256Hex(tk.encodeToUrlString()).toCharArray();
-    StringBuilder fingerprint = new StringBuilder();
-    for (int i = 0; i < 10; ++i) {
-      if (i > 0) {
-        fingerprint.append(' ');
-      }
-      fingerprint.append(digest[2 * i]);
-      fingerprint.append(digest[2 * i + 1]);
-    }
-    return fingerprint.toString();
   }
 
   static class CacheCleanup extends Thread {
@@ -1340,7 +1313,7 @@ public class ResourceLocalizationService extends CompositeService
   }
 
   private void cleanUpLocalDirs(FileContext lfs, DeletionService del) {
-    for (String localDir : dirsHandler.getLocalDirsForCleanup()) {
+    for (String localDir : dirsHandler.getLocalDirs()) {
       cleanUpLocalDir(lfs, del, localDir);
     }
   }

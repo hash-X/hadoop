@@ -15,17 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-MYNAME="${BASH_SOURCE-$0}"
-
 function hadoop_usage
 {
-  hadoop_add_option "--buildpaths" "attempt to add class files from build tree"
-  hadoop_add_option "--loglevel level" "set the log4j level for this command"
-
-  hadoop_generate_usage "${MYNAME}" false
+  echo "Usage: stop-balancer.sh [--config confdir]"
 }
 
-bin=$(cd -P -- "$(dirname -- "${MYNAME}")" >/dev/null && pwd -P)
+this="${BASH_SOURCE-$0}"
+bin=$(cd -P -- "$(dirname -- "${this}")" >/dev/null && pwd -P)
 
 # let's locate libexec...
 if [[ -n "${HADOOP_PREFIX}" ]]; then

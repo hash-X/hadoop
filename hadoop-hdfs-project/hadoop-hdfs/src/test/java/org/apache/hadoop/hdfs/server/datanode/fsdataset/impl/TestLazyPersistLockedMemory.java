@@ -28,7 +28,9 @@ import org.apache.hadoop.hdfs.DFSOutputStream;
 import org.apache.hadoop.hdfs.DFSTestUtil;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
+import org.apache.hadoop.metrics2.MetricsRecordBuilder;
 import org.apache.hadoop.test.GenericTestUtils;
+import org.apache.hadoop.test.MetricsAsserts;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -101,26 +103,25 @@ public class TestLazyPersistLockedMemory extends LazyPersistTestCase {
    * Verify that locked RAM is released when blocks are evicted from RAM disk.
    */
   @Test
-  public void testReleaseOnEviction() throws Exception {
+  public void testReleaseOnEviction()
+      throws IOException, TimeoutException, InterruptedException {
     getClusterBuilder().setNumDatanodes(1)
                        .setMaxLockedMemory(BLOCK_SIZE)
                        .setRamDiskReplicaCapacity(BLOCK_SIZE * 2 - 1)
                        .build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
-    final FsDatasetImpl fsd =
-        (FsDatasetImpl) cluster.getDataNodes().get(0).getFSDataset();
+    final FsDatasetSpi<?> fsd = cluster.getDataNodes().get(0).getFSDataset();
 
-    Path path1 = new Path("/" + METHOD_NAME + ".01.dat");
-    makeTestFile(path1, BLOCK_SIZE, true);
-    assertThat(fsd.getCacheUsed(), is((long) BLOCK_SIZE));
+    Path path = new Path("/" + METHOD_NAME + ".dat");
+    makeTestFile(path, BLOCK_SIZE, true);
 
-    // Wait until the replica is written to persistent storage.
-    waitForMetric("RamDiskBlocksLazyPersisted", 1);
-
-    // Trigger eviction and verify locked bytes were released.
-    fsd.evictLazyPersistBlocks(Long.MAX_VALUE);
-    verifyRamDiskJMXMetric("RamDiskBlocksEvicted", 1);
+    // The block should get evicted soon since it pushes RAM disk free
+    // space below the threshold.
     waitForLockedBytesUsed(fsd, 0);
+
+    MetricsRecordBuilder rb =
+        MetricsAsserts.getMetrics(cluster.getDataNodes().get(0).getMetrics().name());
+    MetricsAsserts.assertCounter("RamDiskBlocksEvicted", 1L, rb);
   }
 
   /**

@@ -33,7 +33,6 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.service.Service;
 import org.apache.hadoop.yarn.api.records.NodeId;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.nodelabels.CommonNodeLabelsManager;
@@ -114,15 +113,9 @@ public class RMNodeLabelsManager extends CommonNodeLabelsManager {
       throws IOException {
     try {
       writeLock.lock();
-      if (getServiceState() == Service.STATE.STARTED) {
-        // We cannot remove node labels from collection when some queue(s) are
-        // using any of them.
-        // We will only do this check when service starting finished. Before
-        // service starting, we will replay edit logs and recover state. It is
-        // possible that a history operation removed some labels which were being
-        // used by some queues in the past but not used by current queues.
-        checkRemoveFromClusterNodeLabelsOfQueue(labelsToRemove);
-      }
+
+      checkRemoveFromClusterNodeLabelsOfQueue(labelsToRemove);
+
       // copy before NMs
       Map<String, Host> before = cloneNodeMap();
 

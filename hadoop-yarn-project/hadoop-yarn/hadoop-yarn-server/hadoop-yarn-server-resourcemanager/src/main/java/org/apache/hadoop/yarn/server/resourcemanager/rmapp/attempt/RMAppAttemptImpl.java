@@ -96,7 +96,7 @@ import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppAttemptA
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.event.AppAttemptRemovedSchedulerEvent;
 import org.apache.hadoop.yarn.server.resourcemanager.security.ClientToAMTokenSecretManagerInRM;
 import org.apache.hadoop.yarn.server.webproxy.ProxyUriUtils;
-import org.apache.hadoop.yarn.state.InvalidStateTransitionException;
+import org.apache.hadoop.yarn.state.InvalidStateTransitonException;
 import org.apache.hadoop.yarn.state.MultipleArcTransition;
 import org.apache.hadoop.yarn.state.SingleArcTransition;
 import org.apache.hadoop.yarn.state.StateMachine;
@@ -784,7 +784,7 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
       try {
         /* keep the master in sync with the state machine */
         this.stateMachine.doTransition(event.getType(), event);
-      } catch (InvalidStateTransitionException e) {
+      } catch (InvalidStateTransitonException e) {
         LOG.error("Can't handle this event at current state", e);
         /* TODO fail the application on the failed transition */
       }
@@ -1309,11 +1309,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
 
       // register the ClientTokenMasterKey after it is saved in the store,
       // otherwise client may hold an invalid ClientToken after RM restarts.
-      if (UserGroupInformation.isSecurityEnabled()) {
-        appAttempt.rmContext.getClientToAMTokenSecretManager()
-            .registerApplication(appAttempt.getAppAttemptId(),
-            appAttempt.getClientTokenMasterKey());
-      }
+      appAttempt.rmContext.getClientToAMTokenSecretManager()
+      .registerApplication(appAttempt.getAppAttemptId(),
+        appAttempt.getClientTokenMasterKey());
     }
   }
 
@@ -1461,9 +1459,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
         .append(status.getDiagnostics());
     if (this.getTrackingUrl() != null) {
       diagnosticsBuilder.append("For more detailed output,").append(
-        " check the application tracking page: ").append(
+        " check application tracking page: ").append(
         this.getTrackingUrl()).append(
-        " Then click on links to logs of each attempt.\n");
+        " Then, click on links to logs of each attempt.\n");
     }
     return diagnosticsBuilder.toString();
   }
@@ -1660,16 +1658,6 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
     }
   }
 
-  // Ack NM to remove finished AM container, not waiting for
-  // new appattempt to pull am container complete msg, new  appattempt
-  // may launch fail and leaves too many completed container in NM
-  private void sendFinishedAMContainerToNM(NodeId nodeId,
-      ContainerId containerId) {
-    List<ContainerId> containerIdList = new ArrayList<ContainerId>();
-    containerIdList.add(containerId);
-    eventHandler.handle(new RMNodeFinishedContainersPulledByAMEvent(
-        nodeId, containerIdList));
-  }
 
   // Ack NM to remove finished containers from context.
   private void sendFinishedContainersToNM() {
@@ -1698,13 +1686,9 @@ public class RMAppAttemptImpl implements RMAppAttempt, Recoverable {
       new ArrayList<ContainerStatus>());
     appAttempt.finishedContainersSentToAM.get(nodeId).add(
       containerFinishedEvent.getContainerStatus());
-
     if (!appAttempt.getSubmissionContext()
       .getKeepContainersAcrossApplicationAttempts()) {
       appAttempt.sendFinishedContainersToNM();
-    } else {
-      appAttempt.sendFinishedAMContainerToNM(nodeId,
-          containerFinishedEvent.getContainerStatus().getContainerId());
     }
   }
 

@@ -114,7 +114,7 @@ public class DatanodeProtocolServerSideTranslatorPB implements
           report, request.getCacheCapacity(), request.getCacheUsed(),
           request.getXmitsInProgress(),
           request.getXceiverCount(), request.getFailedVolumes(),
-          volumeFailureSummary, request.getRequestFullBlockReportLease());
+          volumeFailureSummary);
     } catch (IOException e) {
       throw new ServiceException(e);
     }
@@ -135,7 +135,6 @@ public class DatanodeProtocolServerSideTranslatorPB implements
       builder.setRollingUpgradeStatus(PBHelper
           .convertRollingUpgradeStatus(rollingUpdateStatus));
     }
-    builder.setFullBlockReportLeaseId(response.getFullBlockReportLeaseId());
     return builder.build();
   }
 
@@ -259,7 +258,7 @@ public class DatanodeProtocolServerSideTranslatorPB implements
     List<LocatedBlockProto> lbps = request.getBlocksList();
     LocatedBlock [] blocks = new LocatedBlock [lbps.size()];
     for(int i=0; i<lbps.size(); i++) {
-      blocks[i] = PBHelper.convert(lbps.get(i));
+      blocks[i] = PBHelper.convertLocatedBlockProto(lbps.get(i));
     }
     try {
       impl.reportBadBlocks(blocks);
@@ -281,7 +280,7 @@ public class DatanodeProtocolServerSideTranslatorPB implements
     final List<String> sidprotos = request.getNewTargetStoragesList();
     final String[] storageIDs = sidprotos.toArray(new String[sidprotos.size()]);
     try {
-      impl.commitBlockSynchronization(PBHelperClient.convert(request.getBlock()),
+      impl.commitBlockSynchronization(PBHelper.convert(request.getBlock()),
           request.getNewGenStamp(), request.getNewLength(),
           request.getCloseFile(), request.getDeleteBlock(), dns, storageIDs);
     } catch (IOException e) {

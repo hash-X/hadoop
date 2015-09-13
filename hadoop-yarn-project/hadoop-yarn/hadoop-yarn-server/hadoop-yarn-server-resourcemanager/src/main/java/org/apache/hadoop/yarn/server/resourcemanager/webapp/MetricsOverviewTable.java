@@ -78,7 +78,6 @@ public class MetricsOverviewTable extends HtmlBlock {
         th().$class("ui-state-default")._("Lost Nodes")._().
         th().$class("ui-state-default")._("Unhealthy Nodes")._().
         th().$class("ui-state-default")._("Rebooted Nodes")._().
-        th().$class("ui-state-default")._("Shutdown Nodes")._().
       _().
     _().
     tbody().$class("ui-widget-content").
@@ -104,7 +103,6 @@ public class MetricsOverviewTable extends HtmlBlock {
         td().a(url("nodes/lost"),String.valueOf(clusterMetrics.getLostNodes()))._().
         td().a(url("nodes/unhealthy"),String.valueOf(clusterMetrics.getUnhealthyNodes()))._().
         td().a(url("nodes/rebooted"),String.valueOf(clusterMetrics.getRebootedNodes()))._().
-        td().a(url("nodes/shutdown"),String.valueOf(clusterMetrics.getShutdownNodes()))._().
       _().
     _()._();
     

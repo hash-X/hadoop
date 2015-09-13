@@ -125,7 +125,7 @@ public class TestContainerLaunch extends BaseContainerManagerTest {
   @Before
   public void setup() throws IOException {
     conf.setClass(
-        YarnConfiguration.NM_MON_RESOURCE_CALCULATOR,
+        YarnConfiguration.NM_CONTAINER_MON_RESOURCE_CALCULATOR,
         LinuxResourceCalculatorPlugin.class, ResourceCalculatorPlugin.class);
     super.setup();
   }
@@ -417,7 +417,7 @@ public class TestContainerLaunch extends BaseContainerManagerTest {
     userSetEnv.put(Environment.LOGNAME.name(), "user_set_LOGNAME");
     userSetEnv.put(Environment.PWD.name(), "user_set_PWD");
     userSetEnv.put(Environment.HOME.name(), "user_set_HOME");
-    userSetEnv.put(Environment.CLASSPATH.name(), "APATH");
+    userSetEnv.put(Environment.CLASSPATH.name(), "SYSTEM_CLPATH");
     containerLaunchContext.setEnvironment(userSetEnv);
     Container container = mock(Container.class);
     when(container.getContainerId()).thenReturn(cId);
@@ -463,11 +463,13 @@ public class TestContainerLaunch extends BaseContainerManagerTest {
     Assert.assertTrue(
       result.get(result.size() - 1).endsWith("userjarlink.jar"));
 
-    //Then, with user classpath first
-    userSetEnv.put(Environment.CLASSPATH_PREPEND_DISTCACHE.name(), "true");
+    //Now move userjar to the front
 
     cId = ContainerId.newContainerId(appAttemptId, 1);
     when(container.getContainerId()).thenReturn(cId);
+
+    conf.set(YarnConfiguration.YARN_APPLICATION_CLASSPATH_PREPEND_DISTCACHE,
+      "true");
 
     launch = new ContainerLaunch(distContext, conf,
         dispatcher, exec, null, container, dirsHandler, containerManager);

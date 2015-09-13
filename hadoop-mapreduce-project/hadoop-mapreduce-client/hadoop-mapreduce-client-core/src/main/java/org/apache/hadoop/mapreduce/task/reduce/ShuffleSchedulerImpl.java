@@ -54,8 +54,7 @@ import org.apache.hadoop.util.Time;
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
 public class ShuffleSchedulerImpl<K,V> implements ShuffleScheduler<K,V> {
-  private static final ThreadLocal<Long> SHUFFLE_START =
-      new ThreadLocal<Long>() {
+  static ThreadLocal<Long> shuffleStart = new ThreadLocal<Long>() {
     protected Long initialValue() {
       return 0L;
     }
@@ -424,7 +423,7 @@ public class ShuffleSchedulerImpl<K,V> implements ShuffleScheduler<K,V> {
 
       LOG.debug("Assigning " + host + " with " + host.getNumKnownMapOutputs() +
                " to " + Thread.currentThread().getName());
-      SHUFFLE_START.set(Time.monotonicNow());
+      shuffleStart.set(Time.monotonicNow());
 
       return host;
   }
@@ -465,7 +464,7 @@ public class ShuffleSchedulerImpl<K,V> implements ShuffleScheduler<K,V> {
       }
     }
     LOG.info(host + " freed by " + Thread.currentThread().getName() + " in " +
-             (Time.monotonicNow()-SHUFFLE_START.get()) + "ms");
+             (Time.monotonicNow()-shuffleStart.get()) + "ms");
   }
 
   public synchronized void resetKnownMaps() {

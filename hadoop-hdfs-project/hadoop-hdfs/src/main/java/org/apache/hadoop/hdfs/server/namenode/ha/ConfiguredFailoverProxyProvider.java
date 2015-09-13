@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -39,7 +38,6 @@ import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocols;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.security.UserGroupInformation;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 
 /**
@@ -53,40 +51,16 @@ public class ConfiguredFailoverProxyProvider<T> extends
   private static final Log LOG =
       LogFactory.getLog(ConfiguredFailoverProxyProvider.class);
   
-  interface ProxyFactory<T> {
-    T createProxy(Configuration conf, InetSocketAddress nnAddr, Class<T> xface,
-        UserGroupInformation ugi, boolean withRetries,
-        AtomicBoolean fallbackToSimpleAuth) throws IOException;
-  }
-
-  static class DefaultProxyFactory<T> implements ProxyFactory<T> {
-    @Override
-    public T createProxy(Configuration conf, InetSocketAddress nnAddr,
-        Class<T> xface, UserGroupInformation ugi, boolean withRetries,
-        AtomicBoolean fallbackToSimpleAuth) throws IOException {
-      return NameNodeProxies.createNonHAProxy(conf,
-          nnAddr, xface, ugi, false, fallbackToSimpleAuth).getProxy();
-    }
-  }
-
-  protected final Configuration conf;
-  protected final List<AddressRpcProxyPair<T>> proxies =
+  private final Configuration conf;
+  private final List<AddressRpcProxyPair<T>> proxies =
       new ArrayList<AddressRpcProxyPair<T>>();
   private final UserGroupInformation ugi;
-  protected final Class<T> xface;
-
+  private final Class<T> xface;
+  
   private int currentProxyIndex = 0;
-  private final ProxyFactory<T> factory;
 
   public ConfiguredFailoverProxyProvider(Configuration conf, URI uri,
       Class<T> xface) {
-    this(conf, uri, xface, new DefaultProxyFactory<T>());
-  }
-
-  @VisibleForTesting
-  ConfiguredFailoverProxyProvider(Configuration conf, URI uri,
-      Class<T> xface, ProxyFactory<T> factory) {
-
     Preconditions.checkArgument(
         xface.isAssignableFrom(NamenodeProtocols.class),
         "Interface class %s is not a valid NameNode protocol!");
@@ -104,10 +78,9 @@ public class ConfiguredFailoverProxyProvider<T> extends
         HdfsClientConfigKeys.Failover.CONNECTION_RETRIES_ON_SOCKET_TIMEOUTS_KEY,
         HdfsClientConfigKeys.Failover.CONNECTION_RETRIES_ON_SOCKET_TIMEOUTS_DEFAULT);
     this.conf.setInt(
-            CommonConfigurationKeysPublic
-                    .IPC_CLIENT_CONNECT_MAX_RETRIES_ON_SOCKET_TIMEOUTS_KEY,
-            maxRetriesOnSocketTimeouts);
-
+        CommonConfigurationKeysPublic.IPC_CLIENT_CONNECT_MAX_RETRIES_ON_SOCKET_TIMEOUTS_KEY,
+        maxRetriesOnSocketTimeouts);
+    
     try {
       ugi = UserGroupInformation.getCurrentUser();
       
@@ -129,7 +102,6 @@ public class ConfiguredFailoverProxyProvider<T> extends
       // URI of the cluster. Clone this token to apply to each of the
       // underlying IPC addresses so that the IPC code can find it.
       HAUtil.cloneDelegationTokenForLogicalUri(ugi, uri, addressesOfNns);
-      this.factory = factory;
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
@@ -148,8 +120,8 @@ public class ConfiguredFailoverProxyProvider<T> extends
     AddressRpcProxyPair<T> current = proxies.get(currentProxyIndex);
     if (current.namenode == null) {
       try {
-        current.namenode = factory.createProxy(conf,
-            current.address, xface, ugi, false, fallbackToSimpleAuth);
+        current.namenode = NameNodeProxies.createNonHAProxy(conf,
+            current.address, xface, ugi, false, fallbackToSimpleAuth).getProxy();
       } catch (IOException e) {
         LOG.error("Failed to create RPC proxy to NameNode", e);
         throw new RuntimeException(e);
@@ -159,11 +131,7 @@ public class ConfiguredFailoverProxyProvider<T> extends
   }
 
   @Override
-  public  void performFailover(T currentProxy) {
-    incrementProxyIndex();
-  }
-
-  synchronized void incrementProxyIndex() {
+  public synchronized void performFailover(T currentProxy) {
     currentProxyIndex = (currentProxyIndex + 1) % proxies.size();
   }
 

@@ -184,8 +184,6 @@ class FSDirSnapshotOp {
       snapshotManager.deleteSnapshot(iip, snapshotName, context);
       fsd.updateCount(iip, context.quotaDelta(), false);
       fsd.removeFromInodeMap(removedINodes);
-      fsd.updateReplicationFactor(context.collectedBlocks()
-                                      .toUpdateReplicationInfo());
     } finally {
       fsd.writeUnlock();
     }

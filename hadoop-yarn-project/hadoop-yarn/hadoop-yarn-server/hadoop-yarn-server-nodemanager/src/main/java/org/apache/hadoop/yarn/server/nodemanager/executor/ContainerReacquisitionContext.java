@@ -23,7 +23,6 @@ package org.apache.hadoop.yarn.server.nodemanager.executor;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.yarn.api.records.ContainerId;
-import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Container;
 
 /**
  * Encapsulates information required for container reacquisition.
@@ -32,21 +31,14 @@ import org.apache.hadoop.yarn.server.nodemanager.containermanager.container.Cont
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
 public final class ContainerReacquisitionContext {
-  private final Container container;
   private final String user;
   private final ContainerId containerId;
 
   public static final class Builder {
-    private Container container;
     private String user;
     private ContainerId containerId;
 
     public Builder() {
-    }
-
-    public Builder setContainer(Container container) {
-      this.container = container;
-      return this;
     }
 
     public Builder setUser(String user) {
@@ -65,13 +57,8 @@ public final class ContainerReacquisitionContext {
   }
 
   private ContainerReacquisitionContext(Builder builder) {
-    this.container = builder.container;
     this.user = builder.user;
     this.containerId = builder.containerId;
-  }
-
-  public Container getContainer() {
-    return this.container;
   }
 
   public String getUser() {

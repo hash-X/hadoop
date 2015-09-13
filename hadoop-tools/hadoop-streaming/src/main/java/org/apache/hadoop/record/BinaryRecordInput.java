@@ -57,10 +57,9 @@ public class BinaryRecordInput implements RecordInput {
     this.in = inp;
   }
     
-  private static final ThreadLocal<BinaryRecordInput> B_IN =
-      new ThreadLocal<BinaryRecordInput>() {
+  private static ThreadLocal bIn = new ThreadLocal() {
       @Override
-      protected BinaryRecordInput initialValue() {
+      protected synchronized Object initialValue() {
         return new BinaryRecordInput();
       }
     };
@@ -71,7 +70,7 @@ public class BinaryRecordInput implements RecordInput {
    * @return binary record input corresponding to the supplied DataInput.
    */
   public static BinaryRecordInput get(DataInput inp) {
-    BinaryRecordInput bin = B_IN.get();
+    BinaryRecordInput bin = (BinaryRecordInput) bIn.get();
     bin.setDataInput(inp);
     return bin;
   }

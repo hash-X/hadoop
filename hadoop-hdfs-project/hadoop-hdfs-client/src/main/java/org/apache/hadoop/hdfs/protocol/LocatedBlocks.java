@@ -37,6 +37,7 @@ public class LocatedBlocks {
   private final LocatedBlock lastLocatedBlock;
   private final boolean isLastBlockComplete;
   private final FileEncryptionInfo fileEncryptionInfo;
+  private final ErasureCodingPolicy ecPolicy;
 
   public LocatedBlocks() {
     fileLength = 0;
@@ -45,17 +46,20 @@ public class LocatedBlocks {
     lastLocatedBlock = null;
     isLastBlockComplete = false;
     fileEncryptionInfo = null;
+    ecPolicy = null;
   }
 
   public LocatedBlocks(long flength, boolean isUnderConstuction,
-    List<LocatedBlock> blks, LocatedBlock lastBlock,
-    boolean isLastBlockCompleted, FileEncryptionInfo feInfo) {
+      List<LocatedBlock> blks, LocatedBlock lastBlock,
+      boolean isLastBlockCompleted, FileEncryptionInfo feInfo,
+      ErasureCodingPolicy ecPolicy) {
     fileLength = flength;
     blocks = blks;
     underConstruction = isUnderConstuction;
     this.lastLocatedBlock = lastBlock;
     this.isLastBlockComplete = isLastBlockCompleted;
     this.fileEncryptionInfo = feInfo;
+    this.ecPolicy = ecPolicy;
   }
 
   /**
@@ -109,6 +113,13 @@ public class LocatedBlocks {
    */
   public FileEncryptionInfo getFileEncryptionInfo() {
     return fileEncryptionInfo;
+  }
+
+  /**
+   * @return The ECPolicy for ErasureCoded file, null otherwise.
+   */
+  public ErasureCodingPolicy getErasureCodingPolicy() {
+    return ecPolicy;
   }
 
   /**

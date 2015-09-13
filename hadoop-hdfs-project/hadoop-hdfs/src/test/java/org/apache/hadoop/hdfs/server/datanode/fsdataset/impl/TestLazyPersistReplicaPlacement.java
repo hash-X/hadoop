@@ -19,7 +19,6 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.test.GenericTestUtils;
@@ -29,8 +28,6 @@ import java.io.IOException;
 
 import static org.apache.hadoop.fs.StorageType.DEFAULT;
 import static org.apache.hadoop.fs.StorageType.RAM_DISK;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class TestLazyPersistReplicaPlacement extends LazyPersistTestCase {
@@ -73,50 +70,32 @@ public class TestLazyPersistReplicaPlacement extends LazyPersistTestCase {
     ensureFileReplicasOnStorageType(path, DEFAULT);
   }
 
-  @Test
-  public void testSynchronousEviction() throws Exception {
-    getClusterBuilder().setMaxLockedMemory(BLOCK_SIZE).build();
-    final String METHOD_NAME = GenericTestUtils.getMethodName();
-
-    final Path path1 = new Path("/" + METHOD_NAME + ".01.dat");
-    makeTestFile(path1, BLOCK_SIZE, true);
-    ensureFileReplicasOnStorageType(path1, RAM_DISK);
-
-    // Wait until the replica is written to persistent storage.
-    waitForMetric("RamDiskBlocksLazyPersisted", 1);
-
-    // Ensure that writing a new file to RAM DISK evicts the block
-    // for the previous one.
-    Path path2 = new Path("/" + METHOD_NAME + ".02.dat");
-    makeTestFile(path2, BLOCK_SIZE, true);
-    verifyRamDiskJMXMetric("RamDiskBlocksEvictedWithoutRead", 1);
-  }
-
   /**
    * File can not fit in RamDisk even with eviction
    * @throws IOException
    */
   @Test
   public void testFallbackToDiskFull() throws Exception {
-    getClusterBuilder().setMaxLockedMemory(BLOCK_SIZE / 2).build();
+    getClusterBuilder().setRamDiskReplicaCapacity(0).build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path path = new Path("/" + METHOD_NAME + ".dat");
 
     makeTestFile(path, BLOCK_SIZE, true);
     ensureFileReplicasOnStorageType(path, DEFAULT);
+
     verifyRamDiskJMXMetric("RamDiskBlocksWriteFallback", 1);
   }
 
   /**
    * File partially fit in RamDisk after eviction.
    * RamDisk can fit 2 blocks. Write a file with 5 blocks.
-   * Expect 2 blocks are on RamDisk and rest on disk.
+   * Expect 2 or less blocks are on RamDisk and 3 or more on disk.
    * @throws IOException
    */
   @Test
   public void testFallbackToDiskPartial()
       throws IOException, InterruptedException {
-    getClusterBuilder().setMaxLockedMemory(2 * BLOCK_SIZE).build();
+    getClusterBuilder().setRamDiskReplicaCapacity(2).build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path path = new Path("/" + METHOD_NAME + ".dat");
 
@@ -143,8 +122,8 @@ public class TestLazyPersistReplicaPlacement extends LazyPersistTestCase {
 
     // Since eviction is asynchronous, depending on the timing of eviction
     // wrt writes, we may get 2 or less blocks on RAM disk.
-    assertThat(numBlocksOnRamDisk, is(2));
-    assertThat(numBlocksOnDisk, is(3));
+    assert(numBlocksOnRamDisk <= 2);
+    assert(numBlocksOnDisk >= 3);
   }
 
   /**
@@ -155,8 +134,7 @@ public class TestLazyPersistReplicaPlacement extends LazyPersistTestCase {
    */
   @Test
   public void testRamDiskNotChosenByDefault() throws IOException {
-    getClusterBuilder().setStorageTypes(new StorageType[] {RAM_DISK, RAM_DISK})
-                       .build();
+    getClusterBuilder().build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path path = new Path("/" + METHOD_NAME + ".dat");
 

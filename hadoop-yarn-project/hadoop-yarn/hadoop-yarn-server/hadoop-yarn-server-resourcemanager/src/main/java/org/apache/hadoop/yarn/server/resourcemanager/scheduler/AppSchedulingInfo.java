@@ -128,14 +128,11 @@ public class AppSchedulingInfo {
    *
    * @param requests resources to be acquired
    * @param recoverPreemptedRequest recover Resource Request on preemption
-   * @return true if any resource was updated, false else
    */
-  synchronized public boolean updateResourceRequests(
+  synchronized public void updateResourceRequests(
       List<ResourceRequest> requests, boolean recoverPreemptedRequest) {
     QueueMetrics metrics = queue.getMetrics();
     
-    boolean anyResourcesUpdated = false;
-
     // Update resource requests
     for (ResourceRequest request : requests) {
       Priority priority = request.getPriority();
@@ -149,7 +146,6 @@ public class AppSchedulingInfo {
               + request);
         }
         updatePendingResources = true;
-        anyResourcesUpdated = true;
         
         // Premature optimization?
         // Assumes that we won't see more than one priority request updated
@@ -213,7 +209,6 @@ public class AppSchedulingInfo {
         }
       }
     }
-    return anyResourcesUpdated;
   }
 
   /**

@@ -197,10 +197,9 @@ public class Client {
             clientExecutor.shutdownNow();
           }
         } catch (InterruptedException e) {
-          LOG.warn("Interrupted while waiting for clientExecutor" +
-              " to stop");
+          LOG.error("Interrupted while waiting for clientExecutor" +
+              "to stop", e);
           clientExecutor.shutdownNow();
-          Thread.currentThread().interrupt();
         }
         clientExecutor = null;
       }
@@ -257,10 +256,6 @@ public class Client {
     conf.setInt(CommonConfigurationKeys.IPC_CLIENT_CONNECT_TIMEOUT_KEY, timeout);
   }
 
-  @VisibleForTesting
-  public static final ExecutorService getClientExecutor() {
-    return Client.clientExcecutorFactory.clientExecutor;
-  }
   /**
    * Increment this client's reference count
    *
@@ -1489,13 +1484,7 @@ public class Client {
           }
         });
       } catch (ExecutionException e) {
-        Throwable cause = e.getCause();
-        // the underlying exception should normally be IOException
-        if (cause instanceof IOException) {
-          throw (IOException) cause;
-        } else {
-          throw new IOException(cause);
-        }
+        throw new IOException(e);
       }
       if (connection.addCall(call)) {
         break;

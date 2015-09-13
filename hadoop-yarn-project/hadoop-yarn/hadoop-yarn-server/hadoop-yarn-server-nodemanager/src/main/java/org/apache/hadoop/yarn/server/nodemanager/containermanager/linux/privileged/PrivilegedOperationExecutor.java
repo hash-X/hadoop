@@ -20,7 +20,6 @@
 
 package org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -102,13 +101,7 @@ public class PrivilegedOperationExecutor {
     }
 
     fullCommand.add(containerExecutorExe);
-
-    String cliSwitch = operation.getOperationType().getOption();
-
-    if (!cliSwitch.isEmpty()) {
-      fullCommand.add(cliSwitch);
-    }
-
+    fullCommand.add(operation.getOperationType().getOption());
     fullCommand.addAll(operation.getArguments());
 
     String[] fullCommandArray =
@@ -149,8 +142,6 @@ public class PrivilegedOperationExecutor {
     try {
       exec.execute();
       if (LOG.isDebugEnabled()) {
-        LOG.debug("command array:");
-        LOG.debug(Arrays.toString(fullCommandArray));
         LOG.debug("Privileged Execution Operation Output:");
         LOG.debug(exec.getOutput());
       }
@@ -161,11 +152,7 @@ public class PrivilegedOperationExecutor {
           .append(System.lineSeparator()).append(exec.getOutput()).toString();
 
       LOG.warn(logLine);
-
-      //stderr from shell executor seems to be stuffed into the exception
-      //'message' - so, we have to extract it and set it as the error out
-      throw new PrivilegedOperationException(e, e.getExitCode(),
-          exec.getOutput(), e.getMessage());
+      throw new PrivilegedOperationException(e);
     } catch (IOException e) {
       LOG.warn("IOException executing command: ", e);
       throw new PrivilegedOperationException(e);
@@ -215,7 +202,7 @@ public class PrivilegedOperationExecutor {
 
     StringBuffer finalOpArg = new StringBuffer(PrivilegedOperation
         .CGROUP_ARG_PREFIX);
-    boolean noTasks = true;
+    boolean noneArgsOnly = true;
 
     for (PrivilegedOperation op : ops) {
       if (!op.getOperationType()
@@ -240,24 +227,23 @@ public class PrivilegedOperationExecutor {
         throw new PrivilegedOperationException("Invalid argument: " + arg);
       }
 
-      if (tasksFile.equals(PrivilegedOperation.CGROUP_ARG_NO_TASKS)) {
+      if (tasksFile.equals("none")) {
         //Don't append to finalOpArg
         continue;
       }
 
-      if (noTasks == false) {
+      if (noneArgsOnly == false) {
         //We have already appended at least one tasks file.
-        finalOpArg.append(PrivilegedOperation.LINUX_FILE_PATH_SEPARATOR);
+        finalOpArg.append(",");
         finalOpArg.append(tasksFile);
       } else {
         finalOpArg.append(tasksFile);
-        noTasks = false;
+        noneArgsOnly = false;
       }
     }
 
-    if (noTasks) {
-      finalOpArg.append(PrivilegedOperation.CGROUP_ARG_NO_TASKS); //there
-      // were no tasks file to append
+    if (noneArgsOnly) {
+      finalOpArg.append("none"); //there were no tasks file to append
     }
 
     PrivilegedOperation finalOp = new PrivilegedOperation(

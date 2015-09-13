@@ -28,7 +28,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.concurrent.TimeoutException;
 
 import static org.apache.hadoop.fs.StorageType.DEFAULT;
 import static org.apache.hadoop.fs.StorageType.RAM_DISK;
@@ -39,16 +38,18 @@ import static org.junit.Assert.assertTrue;
 public class TestLazyWriter extends LazyPersistTestCase {
   @Test
   public void testLazyPersistBlocksAreSaved()
-      throws IOException, InterruptedException, TimeoutException {
+      throws IOException, InterruptedException {
     getClusterBuilder().build();
-    final int NUM_BLOCKS = 10;
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path path = new Path("/" + METHOD_NAME + ".dat");
 
     // Create a test file
-    makeTestFile(path, BLOCK_SIZE * NUM_BLOCKS, true);
+    makeTestFile(path, BLOCK_SIZE * 10, true);
     LocatedBlocks locatedBlocks = ensureFileReplicasOnStorageType(path, RAM_DISK);
-    waitForMetric("RamDiskBlocksLazyPersisted", NUM_BLOCKS);
+
+    // Sleep for a short time to allow the lazy writer thread to do its job
+    Thread.sleep(6 * LAZY_WRITER_INTERVAL_SEC * 1000);
+
     LOG.info("Verifying copy was saved to lazyPersist/");
 
     // Make sure that there is a saved copy of the replica on persistent
@@ -56,22 +57,35 @@ public class TestLazyWriter extends LazyPersistTestCase {
     ensureLazyPersistBlocksAreSaved(locatedBlocks);
   }
 
+  /**
+   * RamDisk eviction after lazy persist to disk.
+   * @throws Exception
+   */
   @Test
-  public void testSynchronousEviction() throws Exception {
-    getClusterBuilder().setMaxLockedMemory(BLOCK_SIZE).build();
+  public void testRamDiskEviction() throws Exception {
+    getClusterBuilder().setRamDiskReplicaCapacity(1 + EVICTION_LOW_WATERMARK).build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
+    Path path1 = new Path("/" + METHOD_NAME + ".01.dat");
+    Path path2 = new Path("/" + METHOD_NAME + ".02.dat");
 
-    final Path path1 = new Path("/" + METHOD_NAME + ".01.dat");
-    makeTestFile(path1, BLOCK_SIZE, true);
+    final int SEED = 0xFADED;
+    makeRandomTestFile(path1, BLOCK_SIZE, true, SEED);
     ensureFileReplicasOnStorageType(path1, RAM_DISK);
 
-    // Wait until the replica is written to persistent storage.
-    waitForMetric("RamDiskBlocksLazyPersisted", 1);
+    // Sleep for a short time to allow the lazy writer thread to do its job.
+    Thread.sleep(3 * LAZY_WRITER_INTERVAL_SEC * 1000);
+    ensureFileReplicasOnStorageType(path1, RAM_DISK);
 
-    // Ensure that writing a new file to RAM DISK evicts the block
-    // for the previous one.
-    Path path2 = new Path("/" + METHOD_NAME + ".02.dat");
+    // Create another file with a replica on RAM_DISK.
     makeTestFile(path2, BLOCK_SIZE, true);
+    Thread.sleep(3 * LAZY_WRITER_INTERVAL_SEC * 1000);
+    triggerBlockReport();
+
+    // Ensure the first file was evicted to disk, the second is still on
+    // RAM_DISK.
+    ensureFileReplicasOnStorageType(path2, RAM_DISK);
+    ensureFileReplicasOnStorageType(path1, DEFAULT);
+
     verifyRamDiskJMXMetric("RamDiskBlocksEvicted", 1);
     verifyRamDiskJMXMetric("RamDiskBlocksEvictedWithoutRead", 1);
   }
@@ -84,8 +98,8 @@ public class TestLazyWriter extends LazyPersistTestCase {
    */
   @Test
   public void testRamDiskEvictionBeforePersist()
-      throws Exception {
-    getClusterBuilder().setMaxLockedMemory(BLOCK_SIZE).build();
+      throws IOException, InterruptedException {
+    getClusterBuilder().setRamDiskReplicaCapacity(1).build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path path1 = new Path("/" + METHOD_NAME + ".01.dat");
     Path path2 = new Path("/" + METHOD_NAME + ".02.dat");
@@ -102,7 +116,6 @@ public class TestLazyWriter extends LazyPersistTestCase {
 
     // Eviction should not happen for block of the first file that is not
     // persisted yet.
-    verifyRamDiskJMXMetric("RamDiskBlocksEvicted", 0);
     ensureFileReplicasOnStorageType(path1, RAM_DISK);
     ensureFileReplicasOnStorageType(path2, DEFAULT);
 
@@ -120,7 +133,7 @@ public class TestLazyWriter extends LazyPersistTestCase {
   public void testRamDiskEvictionIsLru()
       throws Exception {
     final int NUM_PATHS = 5;
-    getClusterBuilder().setMaxLockedMemory(NUM_PATHS * BLOCK_SIZE).build();
+    getClusterBuilder().setRamDiskReplicaCapacity(NUM_PATHS + EVICTION_LOW_WATERMARK).build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path paths[] = new Path[NUM_PATHS * 2];
 
@@ -132,7 +145,8 @@ public class TestLazyWriter extends LazyPersistTestCase {
       makeTestFile(paths[i], BLOCK_SIZE, true);
     }
 
-    waitForMetric("RamDiskBlocksLazyPersisted", NUM_PATHS);
+    // Sleep for a short time to allow the lazy writer thread to do its job.
+    Thread.sleep(3 * LAZY_WRITER_INTERVAL_SEC * 1000);
 
     for (int i = 0; i < NUM_PATHS; ++i) {
       ensureFileReplicasOnStorageType(paths[i], RAM_DISK);
@@ -213,13 +227,16 @@ public class TestLazyWriter extends LazyPersistTestCase {
 
     makeTestFile(path, BLOCK_SIZE, true);
     LocatedBlocks locatedBlocks = ensureFileReplicasOnStorageType(path, RAM_DISK);
-    waitForMetric("RamDiskBlocksLazyPersisted", 1);
+
+    // Sleep for a short time to allow the lazy writer thread to do its job
+    Thread.sleep(6 * LAZY_WRITER_INTERVAL_SEC * 1000);
 
     // Delete after persist
     client.delete(path.toString(), false);
     Assert.assertFalse(fs.exists(path));
 
     assertThat(verifyDeletedBlocks(locatedBlocks), is(true));
+
     verifyRamDiskJMXMetric("RamDiskBlocksLazyPersisted", 1);
     verifyRamDiskJMXMetric("RamDiskBytesLazyPersisted", BLOCK_SIZE);
   }
@@ -231,7 +248,7 @@ public class TestLazyWriter extends LazyPersistTestCase {
    */
   @Test
   public void testDfsUsageCreateDelete()
-      throws IOException, InterruptedException, TimeoutException {
+      throws IOException, InterruptedException {
     getClusterBuilder().setRamDiskReplicaCapacity(4).build();
     final String METHOD_NAME = GenericTestUtils.getMethodName();
     Path path = new Path("/" + METHOD_NAME + ".dat");
@@ -244,7 +261,8 @@ public class TestLazyWriter extends LazyPersistTestCase {
 
     assertThat(usedAfterCreate, is((long) BLOCK_SIZE));
 
-    waitForMetric("RamDiskBlocksLazyPersisted", 1);
+    // Sleep for a short time to allow the lazy writer thread to do its job
+    Thread.sleep(3 * LAZY_WRITER_INTERVAL_SEC * 1000);
 
     long usedAfterPersist = fs.getUsed();
     assertThat(usedAfterPersist, is((long) BLOCK_SIZE));

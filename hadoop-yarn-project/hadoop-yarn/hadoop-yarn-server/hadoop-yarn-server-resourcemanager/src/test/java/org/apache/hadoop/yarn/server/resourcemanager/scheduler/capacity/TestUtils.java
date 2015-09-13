@@ -49,7 +49,6 @@ import org.apache.hadoop.yarn.server.resourcemanager.metrics.SystemMetricsPublis
 import org.apache.hadoop.yarn.server.resourcemanager.nodelabels.RMNodeLabelsManager;
 import org.apache.hadoop.yarn.server.resourcemanager.rmcontainer.ContainerAllocationExpirer;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNode;
-import org.apache.hadoop.yarn.server.resourcemanager.scheduler.ResourceScheduler;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerApp;
 import org.apache.hadoop.yarn.server.resourcemanager.scheduler.common.fica.FiCaSchedulerNode;
 import org.apache.hadoop.yarn.server.resourcemanager.security.AMRMTokenSecretManager;
@@ -57,7 +56,6 @@ import org.apache.hadoop.yarn.server.resourcemanager.security.ClientToAMTokenSec
 import org.apache.hadoop.yarn.server.resourcemanager.security.NMTokenSecretManagerInRM;
 import org.apache.hadoop.yarn.server.resourcemanager.security.RMContainerTokenSecretManager;
 import org.apache.hadoop.yarn.server.utils.BuilderUtils;
-import org.apache.hadoop.yarn.util.resource.DefaultResourceCalculator;
 import org.apache.hadoop.yarn.util.resource.Resources;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -102,7 +100,7 @@ public class TestUtils {
           new AMRMTokenSecretManager(conf, null),
           new RMContainerTokenSecretManager(conf),
           new NMTokenSecretManagerInRM(conf),
-          new ClientToAMTokenSecretManagerInRM());
+          new ClientToAMTokenSecretManagerInRM(), writer);
     RMNodeLabelsManager nlm = mock(RMNodeLabelsManager.class);
     when(
         nlm.getQueueResource(any(String.class), any(Set.class),
@@ -116,8 +114,8 @@ public class TestUtils {
     
     when(nlm.getResourceByLabel(any(String.class), any(Resource.class)))
         .thenAnswer(new Answer<Resource>() {
-          @Override public Resource answer(InvocationOnMock invocation)
-              throws Throwable {
+          @Override
+          public Resource answer(InvocationOnMock invocation) throws Throwable {
             Object[] args = invocation.getArguments();
             return (Resource) args[1];
           }
@@ -125,12 +123,6 @@ public class TestUtils {
     
     rmContext.setNodeLabelManager(nlm);
     rmContext.setSystemMetricsPublisher(mock(SystemMetricsPublisher.class));
-    rmContext.setRMApplicationHistoryWriter(mock(RMApplicationHistoryWriter.class));
-    ResourceScheduler mockScheduler = mock(ResourceScheduler.class);
-    when(mockScheduler.getResourceCalculator()).thenReturn(
-        new DefaultResourceCalculator());
-    rmContext.setScheduler(mockScheduler);
-
     return rmContext;
   }
   
@@ -173,18 +165,26 @@ public class TestUtils {
   }
   
   public static ApplicationId getMockApplicationId(int appId) {
-    return ApplicationId.newInstance(0L, appId);
+    ApplicationId applicationId = mock(ApplicationId.class);
+    when(applicationId.getClusterTimestamp()).thenReturn(0L);
+    when(applicationId.getId()).thenReturn(appId);
+    return applicationId;
   }
   
   public static ApplicationAttemptId 
   getMockApplicationAttemptId(int appId, int attemptId) {
     ApplicationId applicationId = BuilderUtils.newApplicationId(0l, appId);
-    return ApplicationAttemptId.newInstance(applicationId, attemptId);
+    ApplicationAttemptId applicationAttemptId = mock(ApplicationAttemptId.class);  
+    when(applicationAttemptId.getApplicationId()).thenReturn(applicationId);
+    when(applicationAttemptId.getAttemptId()).thenReturn(attemptId);
+    return applicationAttemptId;
   }
   
   public static FiCaSchedulerNode getMockNode(
       String host, String rack, int port, int capability) {
-    NodeId nodeId = NodeId.newInstance(host, port);
+    NodeId nodeId = mock(NodeId.class);
+    when(nodeId.getHost()).thenReturn(host);
+    when(nodeId.getPort()).thenReturn(port);
     RMNode rmNode = mock(RMNode.class);
     when(rmNode.getNodeID()).thenReturn(nodeId);
     when(rmNode.getTotalCapability()).thenReturn(
@@ -195,8 +195,6 @@ public class TestUtils {
     
     FiCaSchedulerNode node = spy(new FiCaSchedulerNode(rmNode, false));
     LOG.info("node = " + host + " avail=" + node.getAvailableResource());
-    
-    when(node.getNodeID()).thenReturn(nodeId);
     return node;
   }
 

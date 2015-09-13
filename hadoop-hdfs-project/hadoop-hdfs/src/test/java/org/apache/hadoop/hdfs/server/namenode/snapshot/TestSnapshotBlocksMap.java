@@ -17,11 +17,11 @@
  */
 package org.apache.hadoop.hdfs.server.namenode.snapshot;
 
-import static org.apache.hadoop.hdfs.server.namenode.INodeId.INVALID_INODE_ID;
 import static org.apache.hadoop.test.GenericTestUtils.assertExceptionContains;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -87,6 +87,23 @@ public class TestSnapshotBlocksMap {
     }
   }
 
+  void assertAllNull(INodeFile inode, Path path, String[] snapshots) throws Exception { 
+    Assert.assertNull(inode.getBlocks());
+    assertINodeNull(path.toString());
+    assertINodeNullInSnapshots(path, snapshots);
+  }
+
+  void assertINodeNull(String path) throws Exception {
+    Assert.assertNull(fsdir.getINode(path));
+  }
+
+  void assertINodeNullInSnapshots(Path path, String... snapshots) throws Exception {
+    for(String s : snapshots) {
+      assertINodeNull(SnapshotTestHelper.getSnapshotPath(
+          path.getParent(), s, path.getName()).toString());
+    }
+  }
+
   static INodeFile assertBlockCollection(String path, int numBlocks,
      final FSDirectory dir, final BlockManager blkManager) throws Exception {
     final INodeFile file = INodeFile.valueOf(dir.getINode(path), path);
@@ -100,7 +117,8 @@ public class TestSnapshotBlocksMap {
   static void assertBlockCollection(final BlockManager blkManager,
       final INodeFile file, final BlockInfo b) {
     Assert.assertSame(b, blkManager.getStoredBlock(b));
-    Assert.assertEquals(file.getId(), b.getBlockCollectionId());
+    Assert.assertSame(file, blkManager.getBlockCollection(b));
+    Assert.assertSame(file, b.getBlockCollection());
   }
 
   /**
@@ -132,7 +150,7 @@ public class TestSnapshotBlocksMap {
       hdfs.delete(sub2, true);
       // The INode should have been removed from the blocksMap
       for(BlockInfo b : blocks) {
-        assertEquals(INVALID_INODE_ID, b.getBlockCollectionId());
+        assertNull(blockmanager.getBlockCollection(b));
       }
     }
     
@@ -170,7 +188,7 @@ public class TestSnapshotBlocksMap {
     hdfs.delete(file0, true);
     // Make sure the blocks of file0 is still in blocksMap
     for(BlockInfo b : blocks0) {
-      assertNotEquals(INVALID_INODE_ID, b.getBlockCollectionId());
+      assertNotNull(blockmanager.getBlockCollection(b));
     }
     assertBlockCollection(snapshotFile0.toString(), 4, fsdir, blockmanager);
     
@@ -184,7 +202,7 @@ public class TestSnapshotBlocksMap {
 
     // Make sure the first block of file0 is still in blocksMap
     for(BlockInfo b : blocks0) {
-      assertNotEquals(INVALID_INODE_ID, b.getBlockCollectionId());
+      assertNotNull(blockmanager.getBlockCollection(b));
     }
     assertBlockCollection(snapshotFile0.toString(), 4, fsdir, blockmanager);
 

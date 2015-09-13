@@ -57,9 +57,7 @@ import org.apache.hadoop.util.DiskChecker.DiskErrorException;
 import org.apache.hadoop.util.ShutdownHookManager;
 import org.apache.hadoop.util.Time;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
-
 /**
  * A block pool slice represents a portion of a block pool stored on a volume.  
  * Taken together, all BlockPoolSlices sharing a block pool ID across a 
@@ -303,7 +301,7 @@ class BlockPoolSlice {
   }
 
   void checkDirs() throws DiskErrorException {
-    DiskChecker.checkDir(finalizedDir);
+    DiskChecker.checkDirs(finalizedDir);
     DiskChecker.checkDir(tmpDir);
     DiskChecker.checkDir(rbwDir);
   }
@@ -552,29 +550,10 @@ class BlockPoolSlice {
       // Leave both block replicas in place.
       return replica1;
     }
-    final ReplicaInfo replicaToDelete =
-        selectReplicaToDelete(replica1, replica2);
-    final ReplicaInfo replicaToKeep =
-        (replicaToDelete != replica1) ? replica1 : replica2;
-    // Update volumeMap and delete the replica
-    volumeMap.add(bpid, replicaToKeep);
-    if (replicaToDelete != null) {
-      deleteReplica(replicaToDelete);
-    }
-    return replicaToKeep;
-  }
 
-  @VisibleForTesting
-  static ReplicaInfo selectReplicaToDelete(final ReplicaInfo replica1,
-      final ReplicaInfo replica2) {
     ReplicaInfo replicaToKeep;
     ReplicaInfo replicaToDelete;
 
-    // it's the same block so don't ever delete it, even if GS or size
-    // differs.  caller should keep the one it just discovered on disk
-    if (replica1.getBlockFile().equals(replica2.getBlockFile())) {
-      return null;
-    }
     if (replica1.getGenerationStamp() != replica2.getGenerationStamp()) {
       replicaToKeep = replica1.getGenerationStamp() > replica2.getGenerationStamp()
           ? replica1 : replica2;
@@ -594,10 +573,10 @@ class BlockPoolSlice {
       LOG.debug("resolveDuplicateReplicas decide to keep " + replicaToKeep
           + ".  Will try to delete " + replicaToDelete);
     }
-    return replicaToDelete;
-  }
 
-  private void deleteReplica(final ReplicaInfo replicaToDelete) {
+    // Update volumeMap.
+    volumeMap.add(bpid, replicaToKeep);
+
     // Delete the files on disk. Failure here is okay.
     final File blockFile = replicaToDelete.getBlockFile();
     if (!blockFile.delete()) {
@@ -607,8 +586,10 @@ class BlockPoolSlice {
     if (!metaFile.delete()) {
       LOG.warn("Failed to delete meta file " + metaFile);
     }
-  }
 
+    return replicaToKeep;
+  }
+  
   /**
    * Find out the number of bytes in the block that match its crc.
    * 

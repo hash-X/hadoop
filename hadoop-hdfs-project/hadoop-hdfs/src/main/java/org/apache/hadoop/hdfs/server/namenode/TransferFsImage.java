@@ -70,33 +70,7 @@ import org.mortbay.jetty.EofException;
  */
 @InterfaceAudience.Private
 public class TransferFsImage {
-
-  public enum TransferResult{
-    SUCCESS(HttpServletResponse.SC_OK, false),
-    AUTHENTICATION_FAILURE(HttpServletResponse.SC_FORBIDDEN, true),
-    NOT_ACTIVE_NAMENODE_FAILURE(HttpServletResponse.SC_EXPECTATION_FAILED, false),
-    OLD_TRANSACTION_ID_FAILURE(HttpServletResponse.SC_CONFLICT, false),
-    UNEXPECTED_FAILURE(-1, true);
-
-    private final int response;
-    private final boolean shouldReThrowException;
-
-    private TransferResult(int response, boolean rethrow) {
-      this.response = response;
-      this.shouldReThrowException = rethrow;
-    }
-
-    public static TransferResult getResultForCode(int code){
-      TransferResult ret = UNEXPECTED_FAILURE;
-      for(TransferResult result:TransferResult.values()){
-        if(result.response == code){
-          return result;
-        }
-      }
-      return ret;
-    }
-  }
-
+  
   public final static String CONTENT_LENGTH = "Content-Length";
   public final static String FILE_LENGTH = "File-Length";
   public final static String MD5_HEADER = "X-MD5-Digest";
@@ -224,9 +198,9 @@ public class TransferFsImage {
    * @param txid the transaction ID of the image to be uploaded
    * @throws IOException if there is an I/O error
    */
-  public static TransferResult uploadImageFromStorage(URL fsName, Configuration conf,
+  public static void uploadImageFromStorage(URL fsName, Configuration conf,
       NNStorage storage, NameNodeFile nnf, long txid) throws IOException {
-    return uploadImageFromStorage(fsName, conf, storage, nnf, txid, null);
+    uploadImageFromStorage(fsName, conf, storage, nnf, txid, null);
   }
 
   /**
@@ -241,7 +215,7 @@ public class TransferFsImage {
    * @param canceler optional canceler to check for abort of upload
    * @throws IOException if there is an I/O error or cancellation
    */
-  public static TransferResult uploadImageFromStorage(URL fsName, Configuration conf,
+  public static void uploadImageFromStorage(URL fsName, Configuration conf,
       NNStorage storage, NameNodeFile nnf, long txid, Canceler canceler)
       throws IOException {
     URL url = new URL(fsName, ImageServlet.PATH_SPEC);
@@ -249,18 +223,21 @@ public class TransferFsImage {
     try {
       uploadImage(url, conf, storage, nnf, txid, canceler);
     } catch (HttpPutFailedException e) {
-      // translate the error code to a result, which is a bit more obvious in usage
-      TransferResult result = TransferResult.getResultForCode(e.getResponseCode());
-      if (result.shouldReThrowException) {
+      if (e.getResponseCode() == HttpServletResponse.SC_CONFLICT) {
+        // this is OK - this means that a previous attempt to upload
+        // this checkpoint succeeded even though we thought it failed.
+        LOG.info("Image upload with txid " + txid + 
+            " conflicted with a previous image upload to the " +
+            "same NameNode. Continuing...", e);
+        return;
+      } else {
         throw e;
       }
-      return result;
     }
     double xferSec = Math.max(
         ((float) (Time.monotonicNow() - startTime)) / 1000.0, 0.001);
     LOG.info("Uploaded image with txid " + txid + " to namenode at " + fsName
         + " in " + xferSec + " seconds");
-    return TransferResult.SUCCESS;
   }
 
   /*

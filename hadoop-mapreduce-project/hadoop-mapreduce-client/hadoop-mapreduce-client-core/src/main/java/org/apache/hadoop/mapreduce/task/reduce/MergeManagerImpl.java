@@ -263,9 +263,8 @@ public class MergeManagerImpl<K, V> implements MergeManager<K, V> {
       LOG.info(mapId + ": Shuffling to disk since " + requestedSize + 
                " is greater than maxSingleShuffleLimit (" + 
                maxSingleShuffleLimit + ")");
-      return new OnDiskMapOutput<K,V>(mapId, this, requestedSize, jobConf,
-         fetcher, true, FileSystem.getLocal(jobConf).getRaw(),
-         mapOutputFile.getInputFileForWrite(mapId.getTaskID(), requestedSize));
+      return new OnDiskMapOutput<K,V>(mapId, reduceId, this, requestedSize,
+                                      jobConf, mapOutputFile, fetcher, true);
     }
     
     // Stall shuffle if we are above the memory limit

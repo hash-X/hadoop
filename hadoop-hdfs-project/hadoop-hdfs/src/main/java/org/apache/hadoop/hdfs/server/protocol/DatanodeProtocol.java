@@ -76,6 +76,7 @@ public interface DatanodeProtocol {
   final static int DNA_BALANCERBANDWIDTHUPDATE = 8; // update balancer bandwidth
   final static int DNA_CACHE = 9;      // cache blocks
   final static int DNA_UNCACHE = 10;   // uncache blocks
+  final static int DNA_ERASURE_CODING_RECOVERY = 11; // erasure coding recovery command
 
   /** 
    * Register Datanode.
@@ -102,8 +103,6 @@ public interface DatanodeProtocol {
    * @param xceiverCount number of active transceiver threads
    * @param failedVolumes number of failed volumes
    * @param volumeFailureSummary info about volume failures
-   * @param requestFullBlockReportLease whether to request a full block
-   *                                    report lease.
    * @throws IOException on error
    */
   @Idempotent
@@ -114,8 +113,7 @@ public interface DatanodeProtocol {
                                        int xmitsInProgress,
                                        int xceiverCount,
                                        int failedVolumes,
-                                       VolumeFailureSummary volumeFailureSummary,
-                                       boolean requestFullBlockReportLease)
+                                       VolumeFailureSummary volumeFailureSummary)
       throws IOException;
 
   /**

@@ -86,7 +86,7 @@ public class VersionInfo {
   }
 
   protected String _getBuildVersion(){
-    return _getVersion() +
+    return getVersion() +
       " from " + _getRevision() +
       " by " + _getUser() +
       " source checksum " + _getSrcChecksum();

@@ -90,13 +90,17 @@ public class LocatedFileStatus extends FileStatus {
   }
   
   /**
-   * Compare this FileStatus to another FileStatus
-   * @param   o the FileStatus to be compared.
+   * Compare this object to another object
+   * 
+   * @param   o the object to be compared.
    * @return  a negative integer, zero, or a positive integer as this object
    *   is less than, equal to, or greater than the specified object.
+   * 
+   * @throws ClassCastException if the specified object's is not of 
+   *         type FileStatus
    */
   @Override
-  public int compareTo(FileStatus o) {
+  public int compareTo(Object o) {
     return super.compareTo(o);
   }
   

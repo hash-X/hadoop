@@ -19,13 +19,13 @@ package org.apache.hadoop.hdfs.server.blockmanagement;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
 
 /**
  * Subclass of {@link BlockInfo}, used for a block with replication scheme.
  */
 @InterfaceAudience.Private
 public class BlockInfoContiguous extends BlockInfo {
-  public static final BlockInfoContiguous[] EMPTY_ARRAY = {};
 
   public BlockInfoContiguous(short size) {
     super(size);
@@ -36,11 +36,14 @@ public class BlockInfoContiguous extends BlockInfo {
   }
 
   /**
-   * Copy construction.
-   * @param from BlockInfoContiguous to copy from.
+   * Copy construction. This is used to convert
+   * BlockReplicationInfoUnderConstruction
+   *
+   * @param from BlockReplicationInfo to copy from.
    */
   protected BlockInfoContiguous(BlockInfoContiguous from) {
-    super(from);
+    this(from, (short) (from.triplets.length / 3));
+    this.setBlockCollection(from.getBlockCollection());
   }
 
   /**
@@ -62,7 +65,7 @@ public class BlockInfoContiguous extends BlockInfo {
   }
 
   @Override
-  boolean addStorage(DatanodeStorageInfo storage) {
+  boolean addStorage(DatanodeStorageInfo storage, Block reportedBlock) {
     // find the last null node
     int lastNode = ensureCapacity(1);
     setStorageInfo(lastNode, storage);
@@ -103,5 +106,52 @@ public class BlockInfoContiguous extends BlockInfo {
       }
     }
     return 0;
+  }
+
+  @Override
+  void replaceBlock(BlockInfo newBlock) {
+    assert newBlock instanceof BlockInfoContiguous;
+    for (int i = this.numNodes() - 1; i >= 0; i--) {
+      final DatanodeStorageInfo storage = this.getStorageInfo(i);
+      final boolean removed = storage.removeBlock(this);
+      assert removed : "currentBlock not found.";
+
+      final DatanodeStorageInfo.AddBlockResult result = storage.addBlock(
+          newBlock, newBlock);
+      assert result == DatanodeStorageInfo.AddBlockResult.ADDED :
+          "newBlock already exists.";
+    }
+  }
+
+  /**
+   * Convert a complete block to an under construction block.
+   * @return BlockInfoUnderConstruction -  an under construction block.
+   */
+  public BlockInfoUnderConstructionContiguous convertToBlockUnderConstruction(
+      BlockUCState s, DatanodeStorageInfo[] targets) {
+    if(isComplete()) {
+      BlockInfoUnderConstructionContiguous ucBlock =
+          new BlockInfoUnderConstructionContiguous(this,
+          getBlockCollection().getPreferredBlockReplication(), s, targets);
+      ucBlock.setBlockCollection(getBlockCollection());
+      return ucBlock;
+    }
+    // the block is already under construction
+    BlockInfoUnderConstructionContiguous ucBlock =
+        (BlockInfoUnderConstructionContiguous) this;
+    ucBlock.setBlockUCState(s);
+    ucBlock.setExpectedLocations(targets);
+    ucBlock.setBlockCollection(getBlockCollection());
+    return ucBlock;
+  }
+
+  @Override
+  public final boolean isStriped() {
+    return false;
+  }
+
+  @Override
+  final boolean hasNoStorage() {
+    return getStorageInfo(0) == null;
   }
 }

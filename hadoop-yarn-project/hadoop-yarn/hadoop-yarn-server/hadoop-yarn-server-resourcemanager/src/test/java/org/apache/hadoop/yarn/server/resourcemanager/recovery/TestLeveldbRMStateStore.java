@@ -102,12 +102,6 @@ public class TestLeveldbRMStateStore extends RMStateStoreTestBase {
     testAMRMTokenSecretManagerStateStore(tester);
   }
 
-  @Test(timeout = 60000)
-  public void testReservation() throws Exception {
-    LeveldbStateStoreTester tester = new LeveldbStateStoreTester();
-    testReservationStateStore(tester);
-  }
-
   class LeveldbStateStoreTester implements RMStateStoreHelper {
 
     @Override

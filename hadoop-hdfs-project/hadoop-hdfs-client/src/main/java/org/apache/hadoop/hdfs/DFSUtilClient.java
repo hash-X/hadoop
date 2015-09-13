@@ -22,47 +22,25 @@ import com.google.common.collect.Maps;
 import com.google.common.primitives.SignedBytes;
 import org.apache.commons.io.Charsets;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.crypto.key.KeyProvider;
-import org.apache.hadoop.crypto.key.KeyProviderFactory;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
-import org.apache.hadoop.hdfs.net.BasicInetPeer;
-import org.apache.hadoop.hdfs.net.NioInetPeer;
-import org.apache.hadoop.hdfs.net.Peer;
-import org.apache.hadoop.hdfs.protocol.ClientDatanodeProtocol;
-import org.apache.hadoop.hdfs.protocol.DatanodeID;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
-import org.apache.hadoop.hdfs.protocol.datatransfer.sasl.DataEncryptionKeyFactory;
-import org.apache.hadoop.hdfs.protocol.datatransfer.sasl.SaslDataTransferClient;
-import org.apache.hadoop.hdfs.protocolPB.ClientDatanodeProtocolTranslatorPB;
-import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
-import org.apache.hadoop.hdfs.util.IOUtilsClient;
 import org.apache.hadoop.hdfs.web.WebHdfsConstants;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.net.NodeBase;
-import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.SocketFactory;
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.channels.SocketChannel;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -203,8 +181,6 @@ public class DFSUtilClient {
       }
       blkLocations[idx] = new BlockLocation(xferAddrs, hosts, cachedHosts,
                                             racks,
-                                            blk.getStorageIDs(),
-                                            blk.getStorageTypes(),
                                             blk.getStartOffset(),
                                             blk.getBlockSize(),
                                             blk.isCorrupt());
@@ -341,9 +317,10 @@ public class DFSUtilClient {
       if (address != null) {
         InetSocketAddress isa = NetUtils.createSocketAddr(address);
         if (isa.isUnresolved()) {
-          LOG.warn("Namenode for {} remains unresolved for ID {}. Check your "
-              + "hdfs-site.xml file to ensure namenodes are configured "
-              + "properly.", nsId, nnId);
+          LOG.warn("Namenode for " + nsId +
+                       " remains unresolved for ID " + nnId +
+                   ".  Check your hdfs-site.xml file to " +
+                   "ensure namenodes are configured properly.");
         }
         ret.put(nnId, isa);
       }
@@ -450,141 +427,5 @@ public class DFSUtilClient {
     SimpleDateFormat df =
         new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ENGLISH);
     return df.format(date);
-  }
-
-  private static final Map<String, Boolean> localAddrMap = Collections
-      .synchronizedMap(new HashMap<String, Boolean>());
-
-  public static boolean isLocalAddress(InetSocketAddress targetAddr) {
-    InetAddress addr = targetAddr.getAddress();
-    Boolean cached = localAddrMap.get(addr.getHostAddress());
-    if (cached != null) {
-      if (LOG.isTraceEnabled()) {
-        LOG.trace("Address " + targetAddr +
-            (cached ? " is local" : " is not local"));
-      }
-      return cached;
-    }
-
-    boolean local = NetUtils.isLocalAddress(addr);
-
-    if (LOG.isTraceEnabled()) {
-      LOG.trace("Address " + targetAddr +
-          (local ? " is local" : " is not local"));
-    }
-    localAddrMap.put(addr.getHostAddress(), local);
-    return local;
-  }
-
-  /** Create a {@link ClientDatanodeProtocol} proxy */
-  public static ClientDatanodeProtocol createClientDatanodeProtocolProxy(
-      DatanodeID datanodeid, Configuration conf, int socketTimeout,
-      boolean connectToDnViaHostname, LocatedBlock locatedBlock) throws IOException {
-    return new ClientDatanodeProtocolTranslatorPB(datanodeid, conf, socketTimeout,
-        connectToDnViaHostname, locatedBlock);
-  }
-
-  /** Create {@link ClientDatanodeProtocol} proxy using kerberos ticket */
-  public static ClientDatanodeProtocol createClientDatanodeProtocolProxy(
-      DatanodeID datanodeid, Configuration conf, int socketTimeout,
-      boolean connectToDnViaHostname) throws IOException {
-    return new ClientDatanodeProtocolTranslatorPB(
-        datanodeid, conf, socketTimeout, connectToDnViaHostname);
-  }
-
-  /** Create a {@link ClientDatanodeProtocol} proxy */
-  public static ClientDatanodeProtocol createClientDatanodeProtocolProxy(
-      InetSocketAddress addr, UserGroupInformation ticket, Configuration conf,
-      SocketFactory factory) throws IOException {
-    return new ClientDatanodeProtocolTranslatorPB(addr, ticket, conf, factory);
-  }
-
-  /**
-   * Creates a new KeyProvider from the given Configuration.
-   *
-   * @param conf Configuration
-   * @return new KeyProvider, or null if no provider was found.
-   * @throws IOException if the KeyProvider is improperly specified in
-   *                             the Configuration
-   */
-  public static KeyProvider createKeyProvider(
-      final Configuration conf) throws IOException {
-    final String providerUriStr =
-        conf.getTrimmed(HdfsClientConfigKeys.DFS_ENCRYPTION_KEY_PROVIDER_URI, "");
-    // No provider set in conf
-    if (providerUriStr.isEmpty()) {
-      return null;
-    }
-    final URI providerUri;
-    try {
-      providerUri = new URI(providerUriStr);
-    } catch (URISyntaxException e) {
-      throw new IOException(e);
-    }
-    KeyProvider keyProvider = KeyProviderFactory.get(providerUri, conf);
-    if (keyProvider == null) {
-      throw new IOException("Could not instantiate KeyProvider from " +
-          HdfsClientConfigKeys.DFS_ENCRYPTION_KEY_PROVIDER_URI + " setting of '"
-          + providerUriStr + "'");
-    }
-    if (keyProvider.isTransient()) {
-      throw new IOException("KeyProvider " + keyProvider.toString()
-          + " was found but it is a transient provider.");
-    }
-    return keyProvider;
-  }
-
-  public static Peer peerFromSocket(Socket socket)
-      throws IOException {
-    Peer peer = null;
-    boolean success = false;
-    try {
-      // TCP_NODELAY is crucial here because of bad interactions between
-      // Nagle's Algorithm and Delayed ACKs. With connection keepalive
-      // between the client and DN, the conversation looks like:
-      //   1. Client -> DN: Read block X
-      //   2. DN -> Client: data for block X
-      //   3. Client -> DN: Status OK (successful read)
-      //   4. Client -> DN: Read block Y
-      // The fact that step #3 and #4 are both in the client->DN direction
-      // triggers Nagling. If the DN is using delayed ACKs, this results
-      // in a delay of 40ms or more.
-      //
-      // TCP_NODELAY disables nagling and thus avoids this performance
-      // disaster.
-      socket.setTcpNoDelay(true);
-      SocketChannel channel = socket.getChannel();
-      if (channel == null) {
-        peer = new BasicInetPeer(socket);
-      } else {
-        peer = new NioInetPeer(socket);
-      }
-      success = true;
-      return peer;
-    } finally {
-      if (!success) {
-        if (peer != null) peer.close();
-        socket.close();
-      }
-    }
-  }
-
-  public static Peer peerFromSocketAndKey(
-        SaslDataTransferClient saslClient, Socket s,
-        DataEncryptionKeyFactory keyFactory,
-        Token<BlockTokenIdentifier> blockToken, DatanodeID datanodeId)
-        throws IOException {
-    Peer peer = null;
-    boolean success = false;
-    try {
-      peer = peerFromSocket(s);
-      peer = saslClient.peerSend(peer, keyFactory, blockToken, datanodeId);
-      success = true;
-      return peer;
-    } finally {
-      if (!success) {
-        IOUtilsClient.cleanup(null, peer);
-      }
-    }
   }
 }

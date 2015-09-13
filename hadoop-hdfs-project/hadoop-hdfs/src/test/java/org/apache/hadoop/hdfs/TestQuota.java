@@ -17,24 +17,18 @@
  */
 package org.apache.hadoop.hdfs;
 
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintStream;
 import java.security.PrivilegedExceptionAction;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.ContentSummary;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.DSQuotaExceededException;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.NSQuotaExceededException;
@@ -46,8 +40,6 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.junit.Assert;
 import org.junit.Test;
-
-import com.google.common.base.Charsets;
 
 /** A class for testing quota-related commands */
 public class TestQuota {
@@ -994,49 +986,4 @@ public class TestQuota {
       cluster.shutdown();
     }
   }
-
-  @Test
-  public void testSetSpaceQuotaWhenStorageTypeIsWrong() throws Exception {
-    Configuration conf = new HdfsConfiguration();
-    conf.set(FS_DEFAULT_NAME_KEY, "hdfs://127.0.0.1:8020");
-    DFSAdmin admin = new DFSAdmin(conf);
-    ByteArrayOutputStream err = new ByteArrayOutputStream();
-    System.setErr(new PrintStream(err));
-    String[] args = { "-setSpaceQuota", "100", "-storageType", "COLD",
-        "/testDir" };
-    admin.run(args);
-    String errOutput = new String(err.toByteArray(), Charsets.UTF_8);
-    assertTrue(errOutput.contains(StorageType.getTypesSupportingQuota()
-        .toString()));
-  }
-
-   /**
-   * File count on root , should return total value of files in Filesystem
-   * when one folder contains files more than "dfs.content-summary.limit".
-   */
-  @Test
-  public void testHugeFileCount() throws IOException {
-    MiniDFSCluster cluster = null;
-    Configuration conf = new Configuration();
-    conf.setInt("dfs.content-summary.limit", 4);
-    try {
-      cluster = new MiniDFSCluster.Builder(conf).numDataNodes(0).build();
-      DistributedFileSystem dfs = cluster.getFileSystem();
-      for (int i = 1; i <= 5; i++) {
-        FSDataOutputStream out =
-            dfs.create(new Path("/Folder1/" + "file" + i),(short)1);
-        out.close();
-      }
-      FSDataOutputStream out = dfs.create(new Path("/Folder2/file6"),(short)1);
-      out.close();
-      ContentSummary contentSummary = dfs.getContentSummary(new Path("/"));
-      assertEquals(6, contentSummary.getFileCount());
-    } finally {
-      if (cluster != null) {
-        cluster.shutdown();
-        cluster = null;
-      }
-    }
-  }
-
 }

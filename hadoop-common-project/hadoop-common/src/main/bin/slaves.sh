@@ -27,8 +27,7 @@
 #   HADOOP_SSH_OPTS Options passed to ssh when running remote commands.
 ##
 
-function hadoop_usage
-{
+function hadoop_usage {
   echo "Usage: slaves.sh [--config confdir] command..."
 }
 

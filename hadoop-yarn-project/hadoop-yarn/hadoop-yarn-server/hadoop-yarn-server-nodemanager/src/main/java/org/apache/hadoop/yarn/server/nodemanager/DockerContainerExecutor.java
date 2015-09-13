@@ -413,7 +413,7 @@ public class DockerContainerExecutor extends ContainerExecutor {
   }
 
   @Override
-  public boolean isContainerAlive(ContainerLivenessContext ctx)
+  public boolean isContainerProcessAlive(ContainerLivenessContext ctx)
     throws IOException {
     String pid = ctx.getPid();
 

@@ -40,7 +40,6 @@ import org.apache.hadoop.yarn.api.records.ContainerId;
 import org.apache.hadoop.yarn.api.records.ContainerState;
 import org.apache.hadoop.yarn.api.records.ContainerStatus;
 import org.apache.hadoop.yarn.api.records.NodeId;
-import org.apache.hadoop.yarn.api.records.Priority;
 import org.apache.hadoop.yarn.api.records.Resource;
 import org.apache.hadoop.yarn.api.records.ResourceOption;
 import org.apache.hadoop.yarn.api.records.ResourceRequest;
@@ -67,7 +66,6 @@ import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNode;
 import org.apache.hadoop.yarn.server.resourcemanager.rmnode.RMNodeCleanContainerEvent;
 import org.apache.hadoop.yarn.util.resource.Resources;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.SettableFuture;
 
 
@@ -99,8 +97,6 @@ public abstract class AbstractYarnScheduler
 
   protected RMContext rmContext;
   
-  private volatile Priority maxClusterLevelAppPriority;
-
   /*
    * All schedulers which are inheriting AbstractYarnScheduler should use
    * concurrent version of 'applications' map.
@@ -133,7 +129,6 @@ public abstract class AbstractYarnScheduler
     configuredMaximumAllocationWaitTime =
         conf.getLong(YarnConfiguration.RM_WORK_PRESERVING_RECOVERY_SCHEDULING_WAIT_MS,
           YarnConfiguration.DEFAULT_RM_WORK_PRESERVING_RECOVERY_SCHEDULING_WAIT_MS);
-    maxClusterLevelAppPriority = getMaxPriorityFromConf(conf);
     createReleaseCache();
     super.serviceInit(conf);
   }
@@ -218,12 +213,12 @@ public abstract class AbstractYarnScheduler
   protected synchronized void containerLaunchedOnNode(
       ContainerId containerId, SchedulerNode node) {
     // Get the application for the finished container
-    SchedulerApplicationAttempt application =
-        getCurrentAttemptForContainer(containerId);
+    SchedulerApplicationAttempt application = getCurrentAttemptForContainer
+        (containerId);
     if (application == null) {
-      LOG.info("Unknown application " + containerId.getApplicationAttemptId()
-          .getApplicationId() + " launched container " + containerId
-          + " on node: " + node);
+      LOG.info("Unknown application "
+          + containerId.getApplicationAttemptId().getApplicationId()
+          + " launched container " + containerId + " on node: " + node);
       this.rmContext.getDispatcher().getEventHandler()
         .handle(new RMNodeCleanContainerEvent(node.getNodeID(), containerId));
       return;
@@ -456,30 +451,25 @@ public abstract class AbstractYarnScheduler
     new Timer().schedule(new TimerTask() {
       @Override
       public void run() {
-        clearPendingContainerCache();
+        for (SchedulerApplication<T> app : applications.values()) {
+
+          T attempt = app.getCurrentAppAttempt();
+          synchronized (attempt) {
+            for (ContainerId containerId : attempt.getPendingRelease()) {
+              RMAuditLogger.logFailure(
+                app.getUser(),
+                AuditConstants.RELEASE_CONTAINER,
+                "Unauthorized access or invalid container",
+                "Scheduler",
+                "Trying to release container not owned by app or with invalid id.",
+                attempt.getApplicationId(), containerId);
+            }
+            attempt.getPendingRelease().clear();
+          }
+        }
         LOG.info("Release request cache is cleaned up");
       }
     }, nmExpireInterval);
-  }
-
-  @VisibleForTesting
-  public void clearPendingContainerCache() {
-    for (SchedulerApplication<T> app : applications.values()) {
-      T attempt = app.getCurrentAppAttempt();
-      if (attempt != null) {
-        synchronized (attempt) {
-          for (ContainerId containerId : attempt.getPendingRelease()) {
-            RMAuditLogger.logFailure(app.getUser(),
-                AuditConstants.RELEASE_CONTAINER,
-                "Unauthorized access or invalid container", "Scheduler",
-                "Trying to release container not owned by app "
-                    + "or with invalid id.", attempt.getApplicationId(),
-                containerId);
-          }
-          attempt.getPendingRelease().clear();
-        }
-      }
-    }
   }
 
   // clean up a completed container
@@ -694,43 +684,5 @@ public abstract class AbstractYarnScheduler
       return attempt.getAppSchedulingInfo().getAllResourceRequests();
     }
     return null;
-  }
-
-  @Override
-  public Priority checkAndGetApplicationPriority(Priority priorityFromContext,
-      String user, String queueName, ApplicationId applicationId)
-      throws YarnException {
-    // Dummy Implementation till Application Priority changes are done in
-    // specific scheduler.
-    return Priority.newInstance(0);
-  }
-
-  @Override
-  public void updateApplicationPriority(Priority newPriority,
-      ApplicationId applicationId) throws YarnException {
-    // Dummy Implementation till Application Priority changes are done in
-    // specific scheduler.
-  }
-
-  public Priority getMaxClusterLevelAppPriority() {
-    return maxClusterLevelAppPriority;
-  }
-
-  private Priority getMaxPriorityFromConf(Configuration conf) {
-    return Priority.newInstance(conf.getInt(
-        YarnConfiguration.MAX_CLUSTER_LEVEL_APPLICATION_PRIORITY,
-        YarnConfiguration.DEFAULT_CLUSTER_LEVEL_APPLICATION_PRIORITY));
-  }
-
-  @Override
-  public synchronized void setClusterMaxPriority(Configuration conf)
-      throws YarnException {
-    try {
-      maxClusterLevelAppPriority = getMaxPriorityFromConf(conf);
-    } catch (NumberFormatException e) {
-      throw new YarnException(e);
-    }
-    LOG.info("Updated the cluste max priority to maxClusterLevelAppPriority = "
-        + maxClusterLevelAppPriority);
   }
 }

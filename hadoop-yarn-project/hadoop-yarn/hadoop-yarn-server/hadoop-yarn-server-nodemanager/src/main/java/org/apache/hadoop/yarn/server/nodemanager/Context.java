@@ -70,8 +70,6 @@ public interface Context {
 
   ContainerManagementProtocol getContainerManager();
 
-  NodeResourceMonitor getNodeResourceMonitor();
-
   LocalDirsHandlerService getLocalDirsHandler();
 
   ApplicationACLsManager getApplicationACLsManager();

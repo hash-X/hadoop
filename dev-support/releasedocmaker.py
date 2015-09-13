@@ -19,12 +19,10 @@
 from glob import glob
 from optparse import OptionParser
 from time import gmtime, strftime
-import pprint
 import os
 import re
 import sys
 import urllib
-import urllib2
 try:
   import json
 except ImportError:
@@ -89,55 +87,27 @@ def notableclean(str):
   str=str.rstrip()
   return str
 
-# clean output dir
-def cleanOutputDir(dir):
-    files = os.listdir(dir)
-    for name in files:
-        os.remove(os.path.join(dir,name))
-    os.rmdir(dir)
-
 def mstr(obj):
-  if (obj is None):
+  if (obj == None):
     return ""
   return unicode(obj)
 
-def buildindex(title,license):
+def buildindex(master):
   versions=reversed(sorted(glob("[0-9]*.[0-9]*.[0-9]*")))
   with open("index.md","w") as indexfile:
-    if license is True:
-      indexfile.write(asflicense)
     for v in versions:
-      indexfile.write("* %s v%s\n" % (title,v))
+      indexfile.write("* Apache Hadoop v%s\n" % (v))
       for k in ("Changes","Release Notes"):
-        indexfile.write("    * %s (%s/%s.%s.html)\n" \
+        indexfile.write("    *  %s\n" %(k))
+        indexfile.write("        * [Combined %s](%s/%s.%s.html)\n" \
           % (k,v,k.upper().replace(" ",""),v))
+        if not master:
+          indexfile.write("        * [Hadoop Common %s](%s/%s.HADOOP.%s.html)\n" \
+            % (k,v,k.upper().replace(" ",""),v))
+          for p in ("HDFS","MapReduce","YARN"):
+            indexfile.write("        * [%s %s](%s/%s.%s.%s.html)\n" \
+              % (p,k,v,k.upper().replace(" ",""),p.upper(),v))
   indexfile.close()
-
-class GetVersions:
-  """ yo """
-  def __init__(self,versions, projects):
-    versions = versions
-    projects = projects
-    self.newversions = []
-    pp = pprint.PrettyPrinter(indent=4)
-    at=0
-    end=1
-    count=100
-    versions.sort()
-    print "Looking for %s through %s"%(versions[0],versions[-1])
-    for p in projects:
-      resp = urllib2.urlopen("https://issues.apache.org/jira/rest/api/2/project/%s/versions"%p)
-      data = json.loads(resp.read())
-      for d in data:
-        if d['name'][0].isdigit and versions[0] <= d['name'] and d['name'] <= versions[-1]:
-          print "Adding %s to the list" % d['name']
-          self.newversions.append(d['name'])
-    newlist=list(set(self.newversions))
-    self.newversions=newlist
-
-  def getlist(self):
-      pp = pprint.PrettyPrinter(indent=4)
-      return(self.newversions)
 
 class Version:
   """Represents a version number"""
@@ -178,7 +148,7 @@ class Jira:
     return mstr(self.fields['description'])
 
   def getReleaseNote(self):
-    if (self.notes is None):
+    if (self.notes == None):
       field = self.parent.fieldIdMap['Release Note']
       if (self.fields.has_key(field)):
         self.notes=mstr(self.fields[field])
@@ -189,14 +159,14 @@ class Jira:
   def getPriority(self):
     ret = ""
     pri = self.fields['priority']
-    if(pri is not None):
+    if(pri != None):
       ret = pri['name']
     return mstr(ret)
 
   def getAssignee(self):
     ret = ""
     mid = self.fields['assignee']
-    if(mid is not None):
+    if(mid != None):
       ret = mid['displayName']
     return mstr(ret)
 
@@ -212,21 +182,21 @@ class Jira:
   def getType(self):
     ret = ""
     mid = self.fields['issuetype']
-    if(mid is not None):
+    if(mid != None):
       ret = mid['name']
     return mstr(ret)
 
   def getReporter(self):
     ret = ""
     mid = self.fields['reporter']
-    if(mid is not None):
+    if(mid != None):
       ret = mid['displayName']
     return mstr(ret)
 
   def getProject(self):
     ret = ""
     mid = self.fields['project']
-    if(mid is not None):
+    if(mid != None):
       ret = mid['key']
     return mstr(ret)
 
@@ -244,7 +214,7 @@ class Jira:
     return False
 
   def getIncompatibleChange(self):
-    if (self.incompat is None):
+    if (self.incompat == None):
       field = self.parent.fieldIdMap['Hadoop Flags']
       self.reviewed=False
       self.incompat=False
@@ -257,24 +227,6 @@ class Jira:
               self.reviewed=True
     return self.incompat
 
-  def checkMissingComponent(self):
-      if (len(self.fields['components'])>0):
-          return False
-      return True
-
-  def checkMissingAssignee(self):
-      if (self.fields['assignee'] is not None):
-          return False
-      return True
-
-  def checkVersionString(self):
-      field = self.parent.fieldIdMap['Fix Version/s']
-      for h in self.fields[field]:
-          found = re.match('^((\d+)(\.\d+)*).*$|^(\w+\-\d+)$', h['name'])
-          if not found:
-              return True
-      return False
-
   def getReleaseDate(self,version):
     for j in range(len(self.fields['fixVersions'])):
       if self.fields['fixVersions'][j]==version:
@@ -284,12 +236,10 @@ class Jira:
 class JiraIter:
   """An Iterator of JIRAs"""
 
-  def __init__(self, version, projects):
-    self.version = version
-    self.projects = projects
-    v=str(version).replace("-SNAPSHOT","")
+  def __init__(self, versions):
+    self.versions = versions
 
-    resp = urllib2.urlopen("https://issues.apache.org/jira/rest/api/2/field")
+    resp = urllib.urlopen("https://issues.apache.org/jira/rest/api/2/field")
     data = json.loads(resp.read())
 
     self.fieldIdMap = {}
@@ -301,8 +251,8 @@ class JiraIter:
     end=1
     count=100
     while (at < end):
-      params = urllib.urlencode({'jql': "project in ('"+"' , '".join(projects)+"') and fixVersion in ('"+v+"') and resolution = Fixed", 'startAt':at, 'maxResults':count})
-      resp = urllib2.urlopen("https://issues.apache.org/jira/rest/api/2/search?%s"%params)
+      params = urllib.urlencode({'jql': "project in (HADOOP,HDFS,MAPREDUCE,YARN) and fixVersion in ('"+"' , '".join([str(v).replace("-SNAPSHOT","") for v in versions])+"') and resolution = Fixed", 'startAt':at, 'maxResults':count})
+      resp = urllib.urlopen("https://issues.apache.org/jira/rest/api/2/search?%s"%params)
       data = json.loads(resp.read())
       if (data.has_key('errorMessages')):
         raise Exception(data['errorMessages'])
@@ -311,8 +261,10 @@ class JiraIter:
       self.jiras.extend(data['issues'])
 
       needaversion=False
-      if v not in releaseVersion:
-        needaversion=True
+      for j in versions:
+        v=str(j).replace("-SNAPSHOT","")
+        if v not in releaseVersion:
+          needaversion=True
 
       if needaversion is True:
         for i in range(len(data['issues'])):
@@ -374,32 +326,22 @@ class Outputs:
       self.writeKeyRaw(jira.getProject(), line)
 
 def main():
-  parser = OptionParser(usage="usage: %prog --project PROJECT [--project PROJECT] --version VERSION [--version VERSION2 ...]",
+  parser = OptionParser(usage="usage: %prog --version VERSION [--version VERSION2 ...]",
 		epilog=
                "Markdown-formatted CHANGES and RELEASENOTES files will be stored in a directory"
                " named after the highest version provided.")
-  parser.add_option("-i","--index", dest="index", action="store_true",
-             default=False, help="build an index file")
-  parser.add_option("-l","--license", dest="license", action="store_false",
-             default=True, help="Add an ASF license")
-  parser.add_option("-n","--lint", dest="lint", action="store_true",
-             help="use lint flag to exit on failures")
-  parser.add_option("-p", "--project", dest="projects",
-             action="append", type="string",
-             help="projects in JIRA to include in releasenotes", metavar="PROJECT")
-  parser.add_option("-r", "--range", dest="range", action="store_true",
-             default=False, help="Given versions are a range")
-  parser.add_option("-t", "--projecttitle", dest="title",
-             type="string",
-             help="Title to use for the project (default is Apache PROJECT)")
-  parser.add_option("-u","--usetoday", dest="usetoday", action="store_true",
-             default=False, help="use current date for unreleased versions")
   parser.add_option("-v", "--version", dest="versions",
              action="append", type="string",
              help="versions in JIRA to include in releasenotes", metavar="VERSION")
+  parser.add_option("-m","--master", dest="master", action="store_true",
+             help="only create the master, merged project files")
+  parser.add_option("-i","--index", dest="index", action="store_true",
+             help="build an index file")
+  parser.add_option("-u","--usetoday", dest="usetoday", action="store_true",
+             help="use current date for unreleased versions")
   (options, args) = parser.parse_args()
 
-  if (options.versions is None):
+  if (options.versions == None):
     options.versions = []
 
   if (len(args) > 2):
@@ -408,173 +350,140 @@ def main():
   if (len(options.versions) <= 0):
     parser.error("At least one version needs to be supplied")
 
-  proxy = urllib2.ProxyHandler()
-  opener = urllib2.build_opener(proxy)
-  urllib2.install_opener(opener)
-
-  projects = options.projects
-
-  if (options.range is True):
-    versions = [ Version(v) for v in GetVersions(options.versions, projects).getlist() ]
-  else:
-    versions = [ Version(v) for v in options.versions ]
+  versions = [ Version(v) for v in options.versions ];
   versions.sort();
 
-  if (options.title is None):
-    title=projects[0]
+  maxVersion = str(versions[-1])
+
+  jlist = JiraIter(versions)
+  version = maxVersion
+
+  if version in releaseVersion:
+    reldate=releaseVersion[version]
+  elif options.usetoday:
+    reldate=strftime("%Y-%m-%d", gmtime())
   else:
-    title=options.title
+    reldate="Unreleased"
 
-  haderrors=False
+  if not os.path.exists(version):
+    os.mkdir(version)
 
-  for v in versions:
-    vstr=str(v)
-    jlist = JiraIter(vstr,projects)
-
-    if vstr in releaseVersion:
-      reldate=releaseVersion[vstr]
-    elif options.usetoday:
-      reldate=strftime("%Y-%m-%d", gmtime())
-    else:
-      reldate="Unreleased"
-
-    if not os.path.exists(vstr):
-      os.mkdir(vstr)
-
+  if options.master:
     reloutputs = Outputs("%(ver)s/RELEASENOTES.%(ver)s.md",
       "%(ver)s/RELEASENOTES.%(key)s.%(ver)s.md",
-      [], {"ver":v, "date":reldate, "title":title})
+      [], {"ver":maxVersion, "date":reldate})
     choutputs = Outputs("%(ver)s/CHANGES.%(ver)s.md",
       "%(ver)s/CHANGES.%(key)s.%(ver)s.md",
-      [], {"ver":v, "date":reldate, "title":title})
+      [], {"ver":maxVersion, "date":reldate})
+  else:
+    reloutputs = Outputs("%(ver)s/RELEASENOTES.%(ver)s.md",
+      "%(ver)s/RELEASENOTES.%(key)s.%(ver)s.md",
+      ["HADOOP","HDFS","MAPREDUCE","YARN"], {"ver":maxVersion, "date":reldate})
+    choutputs = Outputs("%(ver)s/CHANGES.%(ver)s.md",
+      "%(ver)s/CHANGES.%(key)s.%(ver)s.md",
+      ["HADOOP","HDFS","MAPREDUCE","YARN"], {"ver":maxVersion, "date":reldate})
 
-    if (options.license is True):
-      reloutputs.writeAll(asflicense)
-      choutputs.writeAll(asflicense)
+  reloutputs.writeAll(asflicense)
+  choutputs.writeAll(asflicense)
 
-    relhead = '# %(title)s %(key)s %(ver)s Release Notes\n\n' \
-      'These release notes cover new developer and user-facing incompatibilities, features, and major improvements.\n\n'
-    chhead = '# %(title)s Changelog\n\n' \
-      '## Release %(ver)s - %(date)s\n'\
-      '\n'
+  relhead = '# Hadoop %(key)s %(ver)s Release Notes\n\n' \
+    'These release notes cover new developer and user-facing incompatibilities, features, and major improvements.\n\n'
 
-    reloutputs.writeAll(relhead)
-    choutputs.writeAll(chhead)
-    errorCount=0
-    warningCount=0
-    lintMessage=""
-    incompatlist=[]
-    buglist=[]
-    improvementlist=[]
-    newfeaturelist=[]
-    subtasklist=[]
-    tasklist=[]
-    testlist=[]
-    otherlist=[]
+  chhead = '# Hadoop Changelog\n\n' \
+    '## Release %(ver)s - %(date)s\n'\
+    '\n'
 
-    for jira in sorted(jlist):
-      if jira.getIncompatibleChange():
-        incompatlist.append(jira)
-      elif jira.getType() == "Bug":
-        buglist.append(jira)
-      elif jira.getType() == "Improvement":
-        improvementlist.append(jira)
-      elif jira.getType() == "New Feature":
-        newfeaturelist.append(jira)
-      elif jira.getType() == "Sub-task":
-        subtasklist.append(jira)
-      elif jira.getType() == "Task":
-       tasklist.append(jira)
-      elif jira.getType() == "Test":
-        testlist.append(jira)
-      else:
-         otherlist.append(jira)
+  reloutputs.writeAll(relhead)
+  choutputs.writeAll(chhead)
 
-      line = '* [%s](https://issues.apache.org/jira/browse/%s) | *%s* | **%s**\n' \
-          % (notableclean(jira.getId()), notableclean(jira.getId()), notableclean(jira.getPriority()),
-             notableclean(jira.getSummary()))
+  incompatlist=[]
+  buglist=[]
+  improvementlist=[]
+  newfeaturelist=[]
+  subtasklist=[]
+  tasklist=[]
+  testlist=[]
+  otherlist=[]
 
-      if (jira.getIncompatibleChange()) and (len(jira.getReleaseNote())==0):
-        warningCount+=1
-        reloutputs.writeKeyRaw(jira.getProject(),"\n---\n\n")
-        reloutputs.writeKeyRaw(jira.getProject(), line)
-        line ='\n**WARNING: No release note provided for this incompatible change.**\n\n'
-        lintMessage += "\nWARNING: incompatible change %s lacks release notes." % (notableclean(jira.getId()))
-        reloutputs.writeKeyRaw(jira.getProject(), line)
+  for jira in sorted(jlist):
+    if jira.getIncompatibleChange():
+      incompatlist.append(jira)
+    elif jira.getType() == "Bug":
+      buglist.append(jira)
+    elif jira.getType() == "Improvement":
+      improvementlist.append(jira)
+    elif jira.getType() == "New Feature":
+      newfeaturelist.append(jira)
+    elif jira.getType() == "Sub-task":
+      subtasklist.append(jira)
+    elif jira.getType() == "Task":
+     tasklist.append(jira)
+    elif jira.getType() == "Test":
+      testlist.append(jira)
+    else:
+       otherlist.append(jira)
 
-      if jira.checkVersionString():
-          warningCount+=1
-          lintMessage += "\nWARNING: Version string problem for %s " % jira.getId()
+    line = '* [%s](https://issues.apache.org/jira/browse/%s) | *%s* | **%s**\n' \
+        % (notableclean(jira.getId()), notableclean(jira.getId()), notableclean(jira.getPriority()),
+           notableclean(jira.getSummary()))
 
-      if (jira.checkMissingComponent() or jira.checkMissingAssignee()):
-          errorCount+=1
-          errorMessage=[]
-          jira.checkMissingComponent() and errorMessage.append("component")
-          jira.checkMissingAssignee() and errorMessage.append("assignee")
-          lintMessage += "\nERROR: missing %s for %s " %  (" and ".join(errorMessage) , jira.getId())
+    if (jira.getIncompatibleChange()) and (len(jira.getReleaseNote())==0):
+      reloutputs.writeKeyRaw(jira.getProject(),"\n---\n\n")
+      reloutputs.writeKeyRaw(jira.getProject(), line)
+      line ='\n**WARNING: No release note provided for this incompatible change.**\n\n'
+      print 'WARNING: incompatible change %s lacks release notes.' % (notableclean(jira.getId()))
+      reloutputs.writeKeyRaw(jira.getProject(), line)
 
-      if (len(jira.getReleaseNote())>0):
-        reloutputs.writeKeyRaw(jira.getProject(),"\n---\n\n")
-        reloutputs.writeKeyRaw(jira.getProject(), line)
-        line ='\n%s\n\n' % (tableclean(jira.getReleaseNote()))
-        reloutputs.writeKeyRaw(jira.getProject(), line)
+    if (len(jira.getReleaseNote())>0):
+      reloutputs.writeKeyRaw(jira.getProject(),"\n---\n\n")
+      reloutputs.writeKeyRaw(jira.getProject(), line)
+      line ='\n%s\n\n' % (tableclean(jira.getReleaseNote()))
+      reloutputs.writeKeyRaw(jira.getProject(), line)
 
-    if (options.lint is True):
-        print lintMessage
-        print "======================================="
-        print "%s: Error:%d, Warning:%d \n" % (vstr, errorCount, warningCount)
-        if (errorCount>0):
-           haderrors=True
-           cleanOutputDir(vstr)
-           continue
+  reloutputs.writeAll("\n\n")
+  reloutputs.close()
 
-    reloutputs.writeAll("\n\n")
-    reloutputs.close()
+  choutputs.writeAll("### INCOMPATIBLE CHANGES:\n\n")
+  choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
+  choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
+  choutputs.writeList(incompatlist)
 
-    choutputs.writeAll("### INCOMPATIBLE CHANGES:\n\n")
-    choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
-    choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
-    choutputs.writeList(incompatlist)
+  choutputs.writeAll("\n\n### NEW FEATURES:\n\n")
+  choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
+  choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
+  choutputs.writeList(newfeaturelist)
 
-    choutputs.writeAll("\n\n### NEW FEATURES:\n\n")
-    choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
-    choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
-    choutputs.writeList(newfeaturelist)
+  choutputs.writeAll("\n\n### IMPROVEMENTS:\n\n")
+  choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
+  choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
+  choutputs.writeList(improvementlist)
 
-    choutputs.writeAll("\n\n### IMPROVEMENTS:\n\n")
-    choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
-    choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
-    choutputs.writeList(improvementlist)
+  choutputs.writeAll("\n\n### BUG FIXES:\n\n")
+  choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
+  choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
+  choutputs.writeList(buglist)
 
-    choutputs.writeAll("\n\n### BUG FIXES:\n\n")
-    choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
-    choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
-    choutputs.writeList(buglist)
+  choutputs.writeAll("\n\n### TESTS:\n\n")
+  choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
+  choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
+  choutputs.writeList(testlist)
 
-    choutputs.writeAll("\n\n### TESTS:\n\n")
-    choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
-    choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
-    choutputs.writeList(testlist)
+  choutputs.writeAll("\n\n### SUB-TASKS:\n\n")
+  choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
+  choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
+  choutputs.writeList(subtasklist)
 
-    choutputs.writeAll("\n\n### SUB-TASKS:\n\n")
-    choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
-    choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
-    choutputs.writeList(subtasklist)
+  choutputs.writeAll("\n\n### OTHER:\n\n")
+  choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
+  choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
+  choutputs.writeList(otherlist)
+  choutputs.writeList(tasklist)
 
-    choutputs.writeAll("\n\n### OTHER:\n\n")
-    choutputs.writeAll("| JIRA | Summary | Priority | Component | Reporter | Contributor |\n")
-    choutputs.writeAll("|:---- |:---- | :--- |:---- |:---- |:---- |\n")
-    choutputs.writeList(otherlist)
-    choutputs.writeList(tasklist)
-
-    choutputs.writeAll("\n\n")
-    choutputs.close()
+  choutputs.writeAll("\n\n")
+  choutputs.close()
 
   if options.index:
-    buildindex(title,options.license)
-
-  if haderrors is True:
-    sys.exit(1)
+    buildindex(options.master)
 
 if __name__ == "__main__":
   main()

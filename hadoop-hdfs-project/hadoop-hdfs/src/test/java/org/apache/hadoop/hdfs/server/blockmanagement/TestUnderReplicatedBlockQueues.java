@@ -19,6 +19,8 @@
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
 import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.server.namenode.ErasureCodingPolicyManager;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -28,8 +30,17 @@ import static org.junit.Assert.fail;
 
 public class TestUnderReplicatedBlockQueues {
 
+  private final ErasureCodingPolicy ecPolicy =
+      ErasureCodingPolicyManager.getSystemDefaultPolicy();
+
   private BlockInfo genBlockInfo(long id) {
     return new BlockInfoContiguous(new Block(id), (short) 3);
+  }
+
+  private BlockInfo genStripedBlockInfo(long id, long numBytes) {
+    BlockInfoStriped sblk =  new BlockInfoStriped(new Block(id), ecPolicy);
+    sblk.setNumBytes(numBytes);
+    return sblk;
   }
 
   /**
@@ -83,6 +94,54 @@ public class TestUnderReplicatedBlockQueues {
     assertEquals(1, queues.getCorruptReplOneBlockSize());
     queues.update(block_very_under_replicated, 0, 0, 1, -4, -24);
     assertEquals(2, queues.getCorruptReplOneBlockSize());
+  }
+
+  @Test
+  public void testStripedBlockPriorities() throws Throwable {
+    int dataBlkNum = ecPolicy.getNumDataUnits();
+    int parityBlkNUm = ecPolicy.getNumParityUnits();
+    doTestStripedBlockPriorities(1, parityBlkNUm);
+    doTestStripedBlockPriorities(dataBlkNum, parityBlkNUm);
+  }
+
+  private void doTestStripedBlockPriorities(int dataBlkNum, int parityBlkNum)
+      throws Throwable {
+    int groupSize = dataBlkNum + parityBlkNum;
+    long numBytes = ecPolicy.getCellSize() * dataBlkNum;
+    UnderReplicatedBlocks queues = new UnderReplicatedBlocks();
+
+    // add a striped block which been left NUM_DATA_BLOCKS internal blocks
+    BlockInfo block1 = genStripedBlockInfo(-100, numBytes);
+    assertAdded(queues, block1, dataBlkNum, 0, groupSize);
+    assertEquals(1, queues.getUnderReplicatedBlockCount());
+    assertEquals(1, queues.size());
+    assertInLevel(queues, block1, UnderReplicatedBlocks.QUEUE_HIGHEST_PRIORITY);
+
+    // add a striped block which been left NUM_DATA_BLOCKS+1 internal blocks
+    BlockInfo block2 = genStripedBlockInfo(-200, numBytes);
+    assertAdded(queues, block2, dataBlkNum + 1, 0, groupSize);
+    assertEquals(2, queues.getUnderReplicatedBlockCount());
+    assertEquals(2, queues.size());
+    assertInLevel(queues, block2,
+        UnderReplicatedBlocks.QUEUE_VERY_UNDER_REPLICATED);
+
+    // add a striped block which been left NUM_DATA_BLOCKS+2 internal blocks
+    BlockInfo block3 = genStripedBlockInfo(-300, numBytes);
+    assertAdded(queues, block3, dataBlkNum + 2, 0, groupSize);
+    assertEquals(3, queues.getUnderReplicatedBlockCount());
+    assertEquals(3, queues.size());
+    assertInLevel(queues, block3,
+        UnderReplicatedBlocks.QUEUE_UNDER_REPLICATED);
+
+    // add a corrupted block
+    BlockInfo block_corrupt = genStripedBlockInfo(-400, numBytes);
+    assertEquals(0, queues.getCorruptBlockSize());
+    assertAdded(queues, block_corrupt, dataBlkNum - 1, 0, groupSize);
+    assertEquals(4, queues.size());
+    assertEquals(3, queues.getUnderReplicatedBlockCount());
+    assertEquals(1, queues.getCorruptBlockSize());
+    assertInLevel(queues, block_corrupt,
+        UnderReplicatedBlocks.QUEUE_WITH_CORRUPT_BLOCKS);
   }
 
   private void assertAdded(UnderReplicatedBlocks queues,

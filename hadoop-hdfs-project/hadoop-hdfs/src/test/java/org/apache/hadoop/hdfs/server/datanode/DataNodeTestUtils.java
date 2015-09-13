@@ -23,7 +23,6 @@ import java.io.File;
 import java.io.IOException;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.DatanodeID;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -52,16 +51,6 @@ public class DataNodeTestUtils {
   public static void setHeartbeatsDisabledForTests(DataNode dn,
       boolean heartbeatsDisabledForTests) {
     dn.setHeartbeatsDisabledForTests(heartbeatsDisabledForTests);
-  }
-
-  /**
-   * Set if cache reports are disabled for all DNs in a mini cluster.
-   */
-  public static void setCacheReportsDisabledForTests(MiniDFSCluster cluster,
-      boolean disabled) {
-    for (DataNode dn : cluster.getDataNodes()) {
-      dn.setCacheReportsDisabledForTest(disabled);
-    }
   }
 
   public static void triggerDeletionReport(DataNode dn) throws IOException {
@@ -150,6 +139,11 @@ public class DataNodeTestUtils {
   public static File getMetaFile(DataNode dn, String bpid, Block b)
       throws IOException {
     return FsDatasetTestUtil.getMetaFile(dn.getFSDataset(), bpid, b);
+  }
+  
+  public static boolean unlinkBlock(DataNode dn, ExtendedBlock bk, int numLinks
+      ) throws IOException {
+    return FsDatasetTestUtil.unlinkBlock(dn.getFSDataset(), bk, numLinks);
   }
 
   public static long getPendingAsyncDeletions(DataNode dn) {

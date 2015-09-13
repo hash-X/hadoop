@@ -115,34 +115,6 @@ public class BlockScanner {
       }
     }
 
-    /**
-     * Determine the configured block scanner interval.
-     *
-     * For compatibility with prior releases of HDFS, if the
-     * configured value is zero then the scan period is
-     * set to 3 weeks.
-     *
-     * If the configured value is less than zero then the scanner
-     * is disabled.
-     *
-     * @param conf Configuration object.
-     * @return block scan period in milliseconds.
-     */
-    private static long getConfiguredScanPeriodMs(Configuration conf) {
-      long tempScanPeriodMs = getUnitTestLong(
-          conf, INTERNAL_DFS_DATANODE_SCAN_PERIOD_MS,
-              TimeUnit.MILLISECONDS.convert(conf.getLong(
-                  DFS_DATANODE_SCAN_PERIOD_HOURS_KEY,
-                  DFS_DATANODE_SCAN_PERIOD_HOURS_DEFAULT), TimeUnit.HOURS));
-
-      if (tempScanPeriodMs == 0) {
-        tempScanPeriodMs = TimeUnit.MILLISECONDS.convert(
-            DFS_DATANODE_SCAN_PERIOD_HOURS_DEFAULT, TimeUnit.HOURS);
-      }
-
-      return tempScanPeriodMs;
-    }
-
     @SuppressWarnings("unchecked")
     Conf(Configuration conf) {
       this.targetBytesPerSec = Math.max(0L, conf.getLong(
@@ -151,7 +123,11 @@ public class BlockScanner {
       this.maxStalenessMs = Math.max(0L, getUnitTestLong(conf,
           INTERNAL_DFS_BLOCK_SCANNER_MAX_STALENESS_MS,
           INTERNAL_DFS_BLOCK_SCANNER_MAX_STALENESS_MS_DEFAULT));
-      this.scanPeriodMs = getConfiguredScanPeriodMs(conf);
+      this.scanPeriodMs = Math.max(0L,
+          getUnitTestLong(conf, INTERNAL_DFS_DATANODE_SCAN_PERIOD_MS,
+              TimeUnit.MILLISECONDS.convert(conf.getLong(
+                  DFS_DATANODE_SCAN_PERIOD_HOURS_KEY,
+                  DFS_DATANODE_SCAN_PERIOD_HOURS_DEFAULT), TimeUnit.HOURS)));
       this.cursorSaveMs = Math.max(0L, getUnitTestLong(conf,
           INTERNAL_DFS_BLOCK_SCANNER_CURSOR_SAVE_INTERVAL_MS,
           INTERNAL_DFS_BLOCK_SCANNER_CURSOR_SAVE_INTERVAL_MS_DEFAULT));
@@ -183,7 +159,7 @@ public class BlockScanner {
    * no threads will start.
    */
   public boolean isEnabled() {
-    return (conf.scanPeriodMs > 0) && (conf.targetBytesPerSec > 0);
+    return (conf.scanPeriodMs) > 0 && (conf.targetBytesPerSec > 0);
   }
 
  /**
@@ -317,7 +293,7 @@ public class BlockScanner {
    */
   synchronized void markSuspectBlock(String storageId, ExtendedBlock block) {
     if (!isEnabled()) {
-      LOG.debug("Not scanning suspicious block {} on {}, because the block " +
+      LOG.info("Not scanning suspicious block {} on {}, because the block " +
           "scanner is disabled.", block, storageId);
       return;
     }

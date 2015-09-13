@@ -96,21 +96,14 @@ public class FairOrderingPolicy<S extends SchedulableEntity> extends AbstractCom
   @Override
   public void containerAllocated(S schedulableEntity,
     RMContainer r) {
-      entityRequiresReordering(schedulableEntity);
+      reorderSchedulableEntity(schedulableEntity);
     }
 
   @Override
   public void containerReleased(S schedulableEntity,
     RMContainer r) {
-      entityRequiresReordering(schedulableEntity);
+      reorderSchedulableEntity(schedulableEntity);
     }
-
-  @Override
-  public void demandUpdated(S schedulableEntity) {
-    if (sizeBasedWeight) {
-      entityRequiresReordering(schedulableEntity);
-    }
-  }
 
   @Override
   public String getInfo() {

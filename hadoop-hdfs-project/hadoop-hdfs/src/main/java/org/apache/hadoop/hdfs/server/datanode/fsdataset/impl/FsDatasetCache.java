@@ -405,13 +405,6 @@ public class FsDatasetCache {
   }
 
   /**
-   * Round up to the OS page size.
-   */
-  long roundUpPageSize(long count) {
-    return usedBytesCount.rounder.roundUp(count);
-  }
-
-  /**
    * Background worker that mmaps, mlocks, and checksums a block
    */
   private class CachingTask implements Runnable {

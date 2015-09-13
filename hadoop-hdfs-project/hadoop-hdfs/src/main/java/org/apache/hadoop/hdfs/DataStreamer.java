@@ -46,6 +46,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.BlockWrite;
 import org.apache.hadoop.hdfs.client.impl.DfsClientConf;
+import org.apache.hadoop.hdfs.protocol.BlockStoragePolicy;
 import org.apache.hadoop.hdfs.protocol.DSQuotaExceededException;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -66,8 +67,9 @@ import org.apache.hadoop.hdfs.protocol.datatransfer.PipelineAck;
 import org.apache.hadoop.hdfs.protocol.datatransfer.Sender;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.BlockOpResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status;
-import org.apache.hadoop.hdfs.protocolPB.PBHelperClient;
+import org.apache.hadoop.hdfs.protocolPB.PBHelper;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
 import org.apache.hadoop.hdfs.server.datanode.CachingStrategy;
 import org.apache.hadoop.hdfs.server.namenode.NotReplicatedYetException;
 import org.apache.hadoop.hdfs.util.ByteArrayManager;
@@ -153,7 +155,9 @@ class DataStreamer extends Daemon {
    * @return if this file is lazy persist
    */
   static boolean isLazyPersist(HdfsFileStatus stat) {
-    return stat.getStoragePolicy() == HdfsConstants.MEMORY_STORAGE_POLICY_ID;
+    final BlockStoragePolicy p = blockStoragePolicySuite.getPolicy(
+        HdfsConstants.MEMORY_STORAGE_POLICY_NAME);
+    return p != null && stat.getStoragePolicy() == p.getId();
   }
 
   /**
@@ -205,6 +209,7 @@ class DataStreamer extends Daemon {
 
   static class ErrorState {
     private boolean error = false;
+    private boolean externalError = false;
     private int badNodeIndex = -1;
     private int restartingNodeIndex = -1;
     private long restartingNodeDeadline = 0;
@@ -216,6 +221,7 @@ class DataStreamer extends Daemon {
 
     synchronized void reset() {
       error = false;
+      externalError = false;
       badNodeIndex = -1;
       restartingNodeIndex = -1;
       restartingNodeDeadline = 0;
@@ -225,13 +231,23 @@ class DataStreamer extends Daemon {
       return error;
     }
 
+    synchronized boolean hasExternalErrorOnly() {
+      return error && externalError && !isNodeMarked();
+    }
+
     synchronized boolean hasDatanodeError() {
-      return error && isNodeMarked();
+      return error && (isNodeMarked() || externalError);
     }
 
     synchronized void setError(boolean err) {
       this.error = err;
     }
+
+    synchronized void initExternalError() {
+      setError(true);
+      this.externalError = true;
+    }
+
 
     synchronized void setBadNodeIndex(int index) {
       this.badNodeIndex = index;
@@ -331,7 +347,7 @@ class DataStreamer extends Daemon {
   }
 
   private volatile boolean streamerClosed = false;
-  private ExtendedBlock block; // its length is number of bytes acked
+  protected ExtendedBlock block; // its length is number of bytes acked
   private Token<BlockTokenIdentifier> accessToken;
   private DataOutputStream blockStream;
   private DataInputStream blockReplyStream;
@@ -362,12 +378,12 @@ class DataStreamer extends Daemon {
   private final LastExceptionInStreamer lastException = new LastExceptionInStreamer();
   private Socket s;
 
-  private final DFSClient dfsClient;
-  private final String src;
+  protected final DFSClient dfsClient;
+  protected final String src;
   /** Only for DataTransferProtocol.writeBlock(..) */
   private final DataChecksum checksum4WriteBlock;
   private final Progressable progress;
-  private final HdfsFileStatus stat;
+  protected final HdfsFileStatus stat;
   // appending to existing partial block
   private volatile boolean appendChunk = false;
   // both dataQueue and ackQueue are protected by dataQueue lock
@@ -375,6 +391,8 @@ class DataStreamer extends Daemon {
   private final LinkedList<DFSPacket> ackQueue = new LinkedList<>();
   private final AtomicReference<CachingStrategy> cachingStrategy;
   private final ByteArrayManager byteArrayManager;
+  private static final BlockStoragePolicySuite blockStoragePolicySuite =
+      BlockStoragePolicySuite.createDefaultSuite();
   //persist blocks on namenode
   private final AtomicBoolean persistBlocks = new AtomicBoolean(false);
   private boolean failPacket = false;
@@ -391,11 +409,13 @@ class DataStreamer extends Daemon {
   private final LoadingCache<DatanodeInfo, DatanodeInfo> excludedNodes;
   private final String[] favoredNodes;
 
-  private DataStreamer(HdfsFileStatus stat, DFSClient dfsClient, String src,
+  private DataStreamer(HdfsFileStatus stat, ExtendedBlock block,
+                       DFSClient dfsClient, String src,
                        Progressable progress, DataChecksum checksum,
                        AtomicReference<CachingStrategy> cachingStrategy,
                        ByteArrayManager byteArrayManage,
                        boolean isAppend, String[] favoredNodes) {
+    this.block = block;
     this.dfsClient = dfsClient;
     this.src = src;
     this.progress = progress;
@@ -420,9 +440,8 @@ class DataStreamer extends Daemon {
                String src, Progressable progress, DataChecksum checksum,
                AtomicReference<CachingStrategy> cachingStrategy,
                ByteArrayManager byteArrayManage, String[] favoredNodes) {
-    this(stat, dfsClient, src, progress, checksum, cachingStrategy,
+    this(stat, block, dfsClient, src, progress, checksum, cachingStrategy,
         byteArrayManage, false, favoredNodes);
-    this.block = block;
     stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
   }
 
@@ -436,10 +455,9 @@ class DataStreamer extends Daemon {
                String src, Progressable progress, DataChecksum checksum,
                AtomicReference<CachingStrategy> cachingStrategy,
                ByteArrayManager byteArrayManage) throws IOException {
-    this(stat, dfsClient, src, progress, checksum, cachingStrategy,
+    this(stat, lastBlock.getBlock(), dfsClient, src, progress, checksum, cachingStrategy,
         byteArrayManage, true, null);
     stage = BlockConstructionStage.PIPELINE_SETUP_APPEND;
-    block = lastBlock.getBlock();
     bytesSent = block.getNumBytes();
     accessToken = lastBlock.getBlockToken();
   }
@@ -482,7 +500,7 @@ class DataStreamer extends Daemon {
     stage = BlockConstructionStage.DATA_STREAMING;
   }
 
-  private void endBlock() {
+  protected void endBlock() {
     if(LOG.isDebugEnabled()) {
       LOG.debug("Closing old block " + block);
     }
@@ -568,7 +586,7 @@ class DataStreamer extends Daemon {
         // get new block from namenode.
         if (stage == BlockConstructionStage.PIPELINE_SETUP_CREATE) {
           if(LOG.isDebugEnabled()) {
-            LOG.debug("Allocating new block");
+            LOG.debug("Allocating new block " + this);
           }
           setPipeline(nextBlockOutputStream());
           initDataStreaming();
@@ -586,10 +604,7 @@ class DataStreamer extends Daemon {
         long lastByteOffsetInBlock = one.getLastByteOffsetBlock();
         if (lastByteOffsetInBlock > stat.getBlockSize()) {
           throw new IOException("BlockSize " + stat.getBlockSize() +
-              " is smaller than data size. " +
-              " Offset of packet in block " +
-              lastByteOffsetInBlock +
-              " Aborting file " + src);
+              " < lastByteOffsetInBlock, " + this + ", " + one);
         }
 
         if (one.isLastPacketInBlock()) {
@@ -1063,6 +1078,10 @@ class DataStreamer extends Daemon {
     if (!errorState.hasDatanodeError()) {
       return false;
     }
+    if (errorState.hasExternalErrorOnly() && block == null) {
+      // block is not yet initialized, handle external error later.
+      return false;
+    }
     if (response != null) {
       LOG.info("Error Recovery for " + block +
           " waiting for responder to exit. ");
@@ -1239,7 +1258,7 @@ class DataStreamer extends Daemon {
 
       //ack
       BlockOpResponseProto response =
-          BlockOpResponseProto.parseFrom(PBHelperClient.vintPrefixed(in));
+          BlockOpResponseProto.parseFrom(PBHelper.vintPrefixed(in));
       if (SUCCESS != response.getStatus()) {
         throw new IOException("Failed to add a datanode");
       }
@@ -1391,15 +1410,28 @@ class DataStreamer extends Daemon {
   }
 
   LocatedBlock updateBlockForPipeline() throws IOException {
+    return callUpdateBlockForPipeline(block);
+  }
+
+  LocatedBlock callUpdateBlockForPipeline(ExtendedBlock newBlock) throws IOException {
     return dfsClient.namenode.updateBlockForPipeline(
-        block, dfsClient.clientName);
+        newBlock, dfsClient.clientName);
+  }
+
+  static ExtendedBlock newBlock(ExtendedBlock b, final long newGS) {
+    return new ExtendedBlock(b.getBlockPoolId(), b.getBlockId(),
+        b.getNumBytes(), newGS);
   }
 
   /** update pipeline at the namenode */
   ExtendedBlock updatePipeline(long newGS) throws IOException {
-    final ExtendedBlock newBlock = new ExtendedBlock(
-        block.getBlockPoolId(), block.getBlockId(), block.getNumBytes(), newGS);
-    dfsClient.namenode.updatePipeline(dfsClient.clientName, block, newBlock,
+    final ExtendedBlock newBlock = newBlock(block, newGS);
+    return callUpdatePipeline(block, newBlock);
+  }
+
+  ExtendedBlock callUpdatePipeline(ExtendedBlock oldBlock, ExtendedBlock newBlock)
+      throws IOException {
+    dfsClient.namenode.updatePipeline(dfsClient.clientName, oldBlock, newBlock,
         nodes, storageIDs);
     return newBlock;
   }
@@ -1518,7 +1550,7 @@ class DataStreamer extends Daemon {
 
         // receive ack for connect
         BlockOpResponseProto resp = BlockOpResponseProto.parseFrom(
-            PBHelperClient.vintPrefixed(blockReplyStream));
+            PBHelper.vintPrefixed(blockReplyStream));
         pipelineStatus = resp.getStatus();
         firstBadLink = resp.getFirstBadLink();
 
@@ -1732,6 +1764,10 @@ class DataStreamer extends Daemon {
     return accessToken;
   }
 
+  ErrorState getErrorState() {
+    return errorState;
+  }
+
   /**
    * Put a packet to the data queue
    *
@@ -1744,7 +1780,7 @@ class DataStreamer extends Daemon {
       dataQueue.addLast(packet);
       lastQueuedSeqno = packet.getSeqno();
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Queued packet " + packet.getSeqno());
+        LOG.debug("Queued " + packet + ", " + this);
       }
       dataQueue.notifyAll();
     }
