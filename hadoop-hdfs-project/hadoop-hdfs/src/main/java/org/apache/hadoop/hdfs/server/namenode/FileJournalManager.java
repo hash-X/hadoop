@@ -193,7 +193,11 @@ public class FileJournalManager implements JournalManager {
       }
       if (elf.isInProgress()) {
         try {
+<<<<<<< HEAD
           elf.validateLog();
+=======
+          elf.scanLog(getLastReadableTxId(), true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
         } catch (IOException e) {
           LOG.error("got IOException while trying to validate header of " +
               elf + ".  Skipping.", e);
@@ -329,7 +333,12 @@ public class FileJournalManager implements JournalManager {
   }
   
   static void addStreamsToCollectionFromFiles(Collection<EditLogFile> elfs,
+<<<<<<< HEAD
       Collection<EditLogInputStream> streams, long fromTxId, boolean inProgressOk) {
+=======
+      Collection<EditLogInputStream> streams, long fromTxId,
+      long maxTxIdToScan, boolean inProgressOk) {
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
     for (EditLogFile elf : elfs) {
       if (elf.isInProgress()) {
         if (!inProgressOk) {
@@ -340,7 +349,11 @@ public class FileJournalManager implements JournalManager {
           continue;
         }
         try {
+<<<<<<< HEAD
           elf.validateLog();
+=======
+          elf.scanLog(maxTxIdToScan, true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
         } catch (IOException e) {
           LOG.error("got IOException while trying to validate header of " +
               elf + ".  Skipping.", e);
@@ -384,7 +397,11 @@ public class FileJournalManager implements JournalManager {
           continue;
         }
 
+<<<<<<< HEAD
         elf.validateLog();
+=======
+        elf.scanLog(getLastReadableTxId(), true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
 
         if (elf.hasCorruptHeader()) {
           elf.moveAsideCorruptFile();
@@ -516,6 +533,7 @@ public class FileJournalManager implements JournalManager {
      * Find out where the edit log ends.
      * This will update the lastTxId of the EditLogFile or
      * mark it as corrupt if it is.
+<<<<<<< HEAD
      */
     public void validateLog() throws IOException {
       EditLogValidation val = EditLogFileInputStream.validateEditLog(file);
@@ -525,6 +543,18 @@ public class FileJournalManager implements JournalManager {
 
     public void scanLog() throws IOException {
       EditLogValidation val = EditLogFileInputStream.scanEditLog(file);
+=======
+     * @param maxTxIdToScan Maximum Tx ID to try to scan.
+     *                      The scan returns after reading this or a higher ID.
+     *                      The file portion beyond this ID is potentially being
+     *                      updated.
+     * @param verifyVersion Whether the scan should verify the layout version
+     */
+    public void scanLog(long maxTxIdToScan, boolean verifyVersion)
+        throws IOException {
+      EditLogValidation val = EditLogFileInputStream.scanEditLog(file,
+          maxTxIdToScan, verifyVersion);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
       this.lastTxId = val.getEndTxId();
       this.hasCorruptHeader = val.hasCorruptHeader();
     }

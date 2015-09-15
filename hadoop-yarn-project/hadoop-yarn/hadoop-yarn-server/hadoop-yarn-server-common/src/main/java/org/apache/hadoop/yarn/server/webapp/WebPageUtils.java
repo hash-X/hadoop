@@ -47,8 +47,12 @@ public class WebPageUtils {
     sb.append("[\n")
       .append("{'sType':'string', 'aTargets': [0]")
       .append(", 'mRender': parseHadoopID }")
+<<<<<<< HEAD
       .append("\n, {'sType':'numeric', 'aTargets': " +
           (isFairSchedulerPage ? "[6, 7]": "[5, 6]"))
+=======
+      .append("\n, {'sType':'numeric', 'aTargets': [6, 7]")
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
       .append(", 'mRender': renderHadoopDate }")
       .append("\n, {'sType':'numeric', bSearchable:false, 'aTargets':");
     if (isFairSchedulerPage) {

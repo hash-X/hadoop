@@ -1223,7 +1223,12 @@ public class TestEditLog {
                                                                           TXNS_PER_ROLL*11);
 
     for (EditLogInputStream edits : editStreams) {
+<<<<<<< HEAD
       FSEditLogLoader.EditLogValidation val = FSEditLogLoader.validateEditLog(edits);
+=======
+      FSEditLogLoader.EditLogValidation val =
+          FSEditLogLoader.scanEditLog(edits, Long.MAX_VALUE);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
       long read = (val.getEndTxId() - edits.getFirstTxId()) + 1;
       LOG.info("Loading edits " + edits + " read " + read);
       assertEquals(startTxId, edits.getFirstTxId());

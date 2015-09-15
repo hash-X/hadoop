@@ -374,4 +374,34 @@ public abstract class ApplicationReport {
   @Unstable
   public abstract void setLogAggregationStatus(
       LogAggregationStatus logAggregationStatus);
+<<<<<<< HEAD
+=======
+
+  /**
+   * @return true if the AM is not managed by the RM
+   */
+  @Public
+  @Unstable
+  public abstract boolean isUnmanagedApp();
+
+  /**
+   * @param unmanagedApplication true if RM should not manage the AM
+   */
+  @Public
+  @Unstable
+  public abstract void setUnmanagedApp(boolean unmanagedApplication);
+
+  /**
+   * Get priority of the application
+   *
+   * @return Application's priority
+   */
+  @Public
+  @Stable
+  public abstract Priority getPriority();
+
+  @Private
+  @Unstable
+  public abstract void setPriority(Priority priority);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
 }

@@ -1633,4 +1633,104 @@
     <name>yarn.nodemanager.log-aggregation.roll-monitoring-interval-seconds</name>
     <value>-1</value>
   </property>
+<<<<<<< HEAD
+=======
+
+  <property>
+    <description>
+    Enable/disable intermediate-data encryption at YARN level. For now,
+    this only is used by the FileSystemRMStateStore to setup right
+    file-system security attributes.
+    </description>
+    <name>yarn.intermediate-data-encryption.enable</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <description>
+    Defines maximum application priority in a cluster.
+    If an application is submitted with a priority higher than this value, it will be
+    reset to this maximum value.
+    </description>
+    <name>yarn.cluster.max-application-priority</name>
+    <value>0</value>
+  </property>
+
+  <property>
+    <description>
+    The default log aggregation policy class. Applications can
+    override it via LogAggregationContext. This configuration can provide
+    some cluster-side default behavior so that if the application doesn't
+    specify any policy via LogAggregationContext administrators of the cluster
+    can adjust the policy globally.
+    </description>
+    <name>yarn.nodemanager.log-aggregation.policy.class</name>
+    <value>org.apache.hadoop.yarn.server.nodemanager.containermanager.logaggregation.AllContainerLogAggregationPolicy</value>
+  </property>
+
+  <property>
+    <description>
+    The default parameters for the log aggregation policy. Applications can
+    override it via LogAggregationContext. This configuration can provide
+    some cluster-side default behavior so that if the application doesn't
+    specify any policy via LogAggregationContext administrators of the cluster
+    can adjust the policy globally.
+    </description>
+    <name>yarn.nodemanager.log-aggregation.policy.parameters</name>
+    <value></value>
+  </property>
+
+  <property>
+    <description>
+    Enable/Disable AMRMProxyService in the node manager. This service is used to intercept
+    calls from the application masters to the resource manager.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.enable</name>
+    <value>false</value>
+  </property>
+
+  <property>
+    <description>
+    The address of the AMRMProxyService listener.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.address</name>
+    <value>0.0.0.0:8048</value>
+  </property>
+
+  <property>
+    <description>
+    The number of threads used to handle requests by the AMRMProxyService.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.client.thread-count</name>
+    <value>25</value>
+  </property>
+
+  <property>
+    <description>
+    The comma separated list of class names that implement the RequestInterceptor interface. This is used by the
+    AMRMProxyService to create the request processing pipeline for applications.
+    </description>
+    <name>yarn.nodemanager.amrmproxy.interceptor-class.pipeline</name>
+    <value>org.apache.hadoop.yarn.server.nodemanager.amrmproxy.DefaultRequestInterceptor</value>
+  </property>
+
+ <property>
+    <description>
+    Enable/disable blacklisting of hosts for AM based on AM failures on those
+    hosts.
+    </description>
+    <name>yarn.am.blacklisting.enabled</name>
+    <value>true</value>
+  </property>
+
+  <property>
+    <description>
+    Threshold of ratio number of NodeManager hosts that are allowed to be
+    blacklisted for AM. Beyond this ratio there is no blacklisting to avoid
+    danger of blacklisting the entire cluster.
+    </description>
+    <name>yarn.am.blacklisting.disable-failure-threshold</name>
+    <value>0.8f</value>
+  </property>
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
 </configuration>

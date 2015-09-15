@@ -466,6 +466,15 @@ public class SchedulerApplicationAttempt implements SchedulableEntity {
       .hasNext();) {
       RMContainer rmContainer = i.next();
       Container container = rmContainer.getContainer();
+<<<<<<< HEAD
+=======
+      ContainerType containerType = ContainerType.TASK;
+      boolean isWaitingForAMContainer = isWaitingForAMContainer(
+          container.getId().getApplicationAttemptId().getApplicationId());
+      if (isWaitingForAMContainer) {
+        containerType = ContainerType.APPLICATION_MASTER;
+      }
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
       try {
         // create container token and NMToken altogether.
         container.setContainerToken(rmContext.getContainerTokenSecretManager()
@@ -493,6 +502,16 @@ public class SchedulerApplicationAttempt implements SchedulableEntity {
     return new ContainersAndNMTokensAllocation(returnContainerList, nmTokens);
   }
 
+  public boolean isWaitingForAMContainer(ApplicationId applicationId) {
+    // The working knowledge is that masterContainer for AM is null as it
+    // itself is the master container.
+    RMAppAttempt appAttempt =
+        rmContext.getRMApps().get(applicationId).getCurrentAppAttempt();
+    return (appAttempt != null && appAttempt.getMasterContainer() == null
+        && appAttempt.getSubmissionContext().getUnmanagedAM() == false);
+  }
+
+  // Blacklist used for user containers
   public synchronized void updateBlacklist(
       List<String> blacklistAdditions, List<String> blacklistRemovals) {
     if (!isStopped) {
@@ -500,9 +519,19 @@ public class SchedulerApplicationAttempt implements SchedulableEntity {
           blacklistAdditions, blacklistRemovals);
     }
   }
-  
+
+  // Blacklist used for AM containers
+  public synchronized void updateAMBlacklist(
+      List<String> blacklistAdditions, List<String> blacklistRemovals) {
+    if (!isStopped) {
+      this.appSchedulingInfo.updateAMBlacklist(
+          blacklistAdditions, blacklistRemovals);
+    }
+  }
+
   public boolean isBlacklisted(String resourceName) {
-    return this.appSchedulingInfo.isBlacklisted(resourceName);
+    boolean useAMBlacklist = isWaitingForAMContainer(getApplicationId());
+    return this.appSchedulingInfo.isBlacklisted(resourceName, useAMBlacklist);
   }
 
   public synchronized int addMissedNonPartitionedRequestSchedulingOpportunity(

@@ -22,7 +22,18 @@ import org.junit.Before;
 import org.junit.Test;
 
 /**
+<<<<<<< HEAD:hadoop-common-project/hadoop-common/src/test/java/org/apache/hadoop/io/erasurecode/TestNativeErasureCode.java
  * Test native erasure code library.
+=======
+ * Container property encoding allocation and execution semantics.
+ * 
+ * <p>
+ * The container types are the following:
+ * <ul>
+ * <li>{@link #APPLICATION_MASTER}
+ * <li>{@link #TASK}
+ * </ul>
+>>>>>>> 76957a485b526468498f93e443544131a88b5684:hadoop-yarn-project/hadoop-yarn/hadoop-yarn-api/src/main/java/org/apache/hadoop/yarn/server/api/ContainerType.java
  */
 public class TestNativeErasureCode {
 

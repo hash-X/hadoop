@@ -167,6 +167,9 @@ public class WebServices {
     } catch (Exception e) {
       rewrapAndThrowException(e);
     }
+    if (appReports == null) {
+      return allApps;
+    }
     for (ApplicationReport appReport : appReports) {
 
       if (checkCount && num == countNum) {
@@ -275,6 +278,9 @@ public class WebServices {
       rewrapAndThrowException(e);
     }
     AppAttemptsInfo appAttemptsInfo = new AppAttemptsInfo();
+    if (appAttemptReports == null) {
+      return appAttemptsInfo;
+    }
     for (ApplicationAttemptReport appAttemptReport : appAttemptReports) {
       AppAttemptInfo appAttemptInfo = new AppAttemptInfo(appAttemptReport);
       appAttemptsInfo.add(appAttemptInfo);
@@ -345,6 +351,9 @@ public class WebServices {
       rewrapAndThrowException(e);
     }
     ContainersInfo containersInfo = new ContainersInfo();
+    if (containerReports == null) {
+      return containersInfo;
+    }
     for (ContainerReport containerReport : containerReports) {
       ContainerInfo containerInfo = new ContainerInfo(containerReport);
       containersInfo.add(containerInfo);

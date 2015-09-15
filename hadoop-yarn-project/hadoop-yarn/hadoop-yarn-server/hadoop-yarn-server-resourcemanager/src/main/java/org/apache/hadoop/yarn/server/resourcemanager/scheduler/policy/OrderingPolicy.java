@@ -102,7 +102,16 @@ public interface OrderingPolicy<S extends SchedulableEntity> {
     RMContainer r);
   
   /**
+<<<<<<< HEAD
    * Display information regarding configuration & status
+=======
+   * Demand Updated for the passed schedulableEntity, reorder if needed.
+   */
+  void demandUpdated(S schedulableEntity);
+
+  /**
+   * Display information regarding configuration and status
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
    */
   public String getInfo();
   

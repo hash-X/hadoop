@@ -330,7 +330,12 @@ public class TestFSEditLogLoader {
     } finally {
       rwf.close();
     }
+<<<<<<< HEAD
     EditLogValidation validation = EditLogFileInputStream.validateEditLog(logFile);
+=======
+    EditLogValidation validation =
+        EditLogFileInputStream.scanEditLog(logFile, Long.MAX_VALUE, true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
     assertTrue(validation.hasCorruptHeader());
   }
 
@@ -345,7 +350,11 @@ public class TestFSEditLogLoader {
     File logFileBak = new File(testDir, logFile.getName() + ".bak");
     Files.copy(logFile, logFileBak);
     EditLogValidation validation =
+<<<<<<< HEAD
         EditLogFileInputStream.validateEditLog(logFile);
+=======
+        EditLogFileInputStream.scanEditLog(logFile, Long.MAX_VALUE, true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
     assertTrue(!validation.hasCorruptHeader());
     // We expect that there will be an OP_START_LOG_SEGMENT, followed by
     // NUM_TXNS opcodes, followed by an OP_END_LOG_SEGMENT.
@@ -358,7 +367,12 @@ public class TestFSEditLogLoader {
       // Restore backup, corrupt the txn opcode
       Files.copy(logFileBak, logFile);
       corruptByteInFile(logFile, txOffset);
+<<<<<<< HEAD
       validation = EditLogFileInputStream.validateEditLog(logFile);
+=======
+      validation = EditLogFileInputStream.scanEditLog(logFile,
+          Long.MAX_VALUE, true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
       long expectedEndTxId = (txId == (NUM_TXNS + 1)) ?
           NUM_TXNS : (NUM_TXNS + 1);
       assertEquals("Failed when corrupting txn opcode at " + txOffset,
@@ -375,7 +389,12 @@ public class TestFSEditLogLoader {
       // Restore backup, corrupt the txn opcode
       Files.copy(logFileBak, logFile);
       truncateFile(logFile, txOffset);
+<<<<<<< HEAD
       validation = EditLogFileInputStream.validateEditLog(logFile);
+=======
+      validation = EditLogFileInputStream.scanEditLog(logFile,
+          Long.MAX_VALUE, true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
       long expectedEndTxId = (txId == 0) ?
           HdfsServerConstants.INVALID_TXID : (txId - 1);
       assertEquals("Failed when corrupting txid " + txId + " txn opcode " +
@@ -393,7 +412,11 @@ public class TestFSEditLogLoader {
     // layout flags section.
     truncateFile(logFile, 8);
     EditLogValidation validation =
+<<<<<<< HEAD
         EditLogFileInputStream.validateEditLog(logFile);
+=======
+        EditLogFileInputStream.scanEditLog(logFile, Long.MAX_VALUE, true);
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
     assertTrue(!validation.hasCorruptHeader());
     assertEquals(HdfsServerConstants.INVALID_TXID, validation.getEndTxId());
   }

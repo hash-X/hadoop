@@ -206,9 +206,16 @@ public class FairSchedulerTestBase {
   protected void createApplicationWithAMResource(ApplicationAttemptId attId,
       String queue, String user, Resource amResource) {
     RMContext rmContext = resourceManager.getRMContext();
+<<<<<<< HEAD
     RMApp rmApp = new RMAppImpl(attId.getApplicationId(), rmContext, conf,
         null, null, null, ApplicationSubmissionContext.newInstance(null, null,
         null, null, null, false, false, 0, amResource, null), null, null,
+=======
+    ApplicationId appId = attId.getApplicationId();
+    RMApp rmApp = new RMAppImpl(appId, rmContext, conf,
+        null, user, null, ApplicationSubmissionContext.newInstance(appId, null,
+        queue, null, null, false, false, 0, amResource, null), scheduler, null,
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
         0, null, null, null);
     rmContext.getRMApps().put(attId.getApplicationId(), rmApp);
     AppAddedSchedulerEvent appAddedEvent = new AppAddedSchedulerEvent(

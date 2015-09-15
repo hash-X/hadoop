@@ -59,6 +59,21 @@ public class AuthenticationToken extends AuthToken {
   }
 
   /**
+<<<<<<< HEAD
+=======
+   * Sets the max inactive time of the token.
+   *
+   * @param maxInactives inactive time of the token in milliseconds
+   *                     since the epoch.
+   */
+  public void setMaxInactives(long maxInactives) {
+    if (this != AuthenticationToken.ANONYMOUS) {
+      super.setMaxInactives(maxInactives);
+    }
+  }
+
+  /**
+>>>>>>> 76957a485b526468498f93e443544131a88b5684
    * Sets the expiration of the token.
    *
    * @param expires expiration time of the token in milliseconds since the epoch.
